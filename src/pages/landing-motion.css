@@ -1,0 +1,249 @@
+/* Motion follows the product story. The page stays readable before JS runs. */
+.lv-reveal {
+  transition:
+    opacity 720ms ease,
+    transform 720ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lv-motion-ready .lv-reveal:not(.is-visible) {
+  opacity: 0;
+  transform: translate3d(0, 22px, 0);
+}
+.lv-motion-ready .lv-reveal-left:not(.is-visible) {
+  transform: translate3d(-30px, 0, 0);
+}
+.lv-motion-ready .lv-reveal-right:not(.is-visible) {
+  transform: translate3d(30px, 0, 0);
+}
+.lv-reveal-group > * {
+  transition:
+    opacity 640ms ease,
+    transform 640ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 200ms ease;
+}
+.lv-motion-ready .lv-reveal-group:not(.is-visible) > * {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0);
+}
+.lv-reveal-group > :nth-child(2) {
+  transition-delay: 80ms;
+}
+.lv-reveal-group > :nth-child(3) {
+  transition-delay: 160ms;
+}
+.lv-reveal-group > :nth-child(4) {
+  transition-delay: 240ms;
+}
+.lv-reveal-group > :nth-child(5) {
+  transition-delay: 320ms;
+}
+.lv-reveal-group > :nth-child(6) {
+  transition-delay: 400ms;
+}
+
+/* The opening beat gives the headline priority, then introduces the product. */
+.lv-hero-copy > .lv-section-label {
+  animation: lv-hero-enter 620ms 40ms both;
+}
+.lv-hero h1 {
+  animation: lv-hero-enter 780ms 110ms both;
+}
+.lv-hero-copy > p {
+  animation: lv-hero-enter 720ms 220ms both;
+}
+.lv-hero-actions {
+  animation: lv-hero-enter 680ms 340ms both;
+}
+.lv-hero-proof {
+  animation: lv-hero-enter 680ms 440ms both;
+}
+.lv-hero-stage {
+  animation: lv-hero-enter 950ms 380ms both;
+}
+@keyframes lv-hero-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.lv-hero.is-active .lv-floating-youtube {
+  animation: lv-float-left 7s ease-in-out infinite;
+}
+.lv-hero.is-active .lv-floating-instagram {
+  animation: lv-float-right 8s ease-in-out infinite;
+}
+.lv-hero.is-active .lv-floating-short {
+  animation: lv-float-right 7.5s ease-in-out infinite reverse;
+}
+.lv-hero.is-active .lv-stage-halo {
+  animation: lv-halo-breathe 8s ease-in-out infinite;
+}
+@keyframes lv-float-left {
+  0%,
+  100% {
+    transform: rotate(-5deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-3deg) translateY(-8px);
+  }
+}
+@keyframes lv-float-right {
+  0%,
+  100% {
+    transform: rotate(5deg) translateY(0);
+  }
+  50% {
+    transform: rotate(3deg) translateY(7px);
+  }
+}
+@keyframes lv-halo-breathe {
+  0%,
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.07);
+  }
+}
+
+/* Continuous lines connect the four stages instead of animating isolated cards. */
+.lv-flow::before,
+.lv-timeline::before {
+  transform-origin: left center;
+  transition: transform 1100ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.lv-motion-ready .lv-flow:not(.is-visible)::before,
+.lv-motion-ready .lv-timeline:not(.is-visible)::before {
+  transform: scaleX(0);
+}
+.lv-flow.is-visible::before,
+.lv-timeline.is-visible::before {
+  transition-delay: 120ms;
+}
+
+/* A quiet reading cursor reinforces the transcript preview. */
+.lv-transcript-wave {
+  position: relative;
+  overflow: hidden;
+}
+.lv-transcript-wave::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 28%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(104, 169, 118, 0.22),
+    transparent
+  );
+  transform: translateX(-120%);
+  pointer-events: none;
+}
+.lv-transcript-preview.is-active .lv-transcript-wave::after {
+  animation: lv-transcript-scan 3.8s ease-in-out infinite;
+}
+@keyframes lv-transcript-scan {
+  0%,
+  16% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+  32% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    transform: translateX(370%);
+    opacity: 0;
+  }
+}
+
+/* Switching platform tabs updates the preview in a single short beat. */
+.lv-output-panel-main,
+.lv-output-panel-aside {
+  animation: lv-panel-switch 390ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.lv-output-panel-aside {
+  animation-delay: 55ms;
+}
+@keyframes lv-panel-switch {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* The final brand shapes move slowly enough to stay behind the message. */
+.lv-final.is-active .lv-final-orbit-one {
+  animation: lv-orbit-one 18s ease-in-out infinite alternate;
+}
+.lv-final.is-active .lv-final-orbit-two {
+  animation: lv-orbit-two 21s ease-in-out infinite alternate;
+}
+@keyframes lv-orbit-one {
+  from {
+    transform: rotate(32deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: rotate(43deg) translate3d(18px, -12px, 0);
+  }
+}
+@keyframes lv-orbit-two {
+  from {
+    transform: rotate(32deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: rotate(22deg) translate3d(-15px, 12px, 0);
+  }
+}
+
+@media (max-width: 600px) {
+  .lv-hero.is-active .lv-floating-youtube,
+  .lv-hero.is-active .lv-floating-instagram {
+    animation: none;
+  }
+  .lv-timeline::before {
+    transform-origin: center top;
+  }
+  .lv-motion-ready .lv-timeline:not(.is-visible)::before {
+    transform: scaleY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-motion-ready .lv-reveal,
+  .lv-motion-ready .lv-reveal-group > * {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+  .lv-motion-ready .lv-flow::before,
+  .lv-motion-ready .lv-timeline::before {
+    transform: none !important;
+    transition: none !important;
+  }
+  .lv-hero-copy > .lv-section-label,
+  .lv-hero h1,
+  .lv-hero-copy > p,
+  .lv-hero-actions,
+  .lv-hero-proof,
+  .lv-hero-stage,
+  .lv-hero.is-active .lv-floating,
+  .lv-hero.is-active .lv-stage-halo,
+  .lv-transcript-preview.is-active .lv-transcript-wave::after,
+  .lv-output-panel-main,
+  .lv-output-panel-aside,
+  .lv-final.is-active .lv-final-orbit {
+    animation: none !important;
+  }
+}
