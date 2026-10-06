@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -243,70 +243,63 @@ export const ClipEditorPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio'>('captions');
 
   // Load editor data on mount
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!clipId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [editorData, captionData, reframeData] = await Promise.all([
+        clipRenderService.getClipEditorData(clipId),
+        clipRenderService.getClipCaptions(clipId).catch(() => ({ timingMode: 'segment', cues: [] })),
+        clipRenderService.getClipReframe(clipId).catch(() => null),
+      ]);
 
-    let mounted = true;
-    const loadData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [editorData, captionData, reframeData] = await Promise.all([
-          clipRenderService.getClipEditorData(clipId),
-          clipRenderService.getClipCaptions(clipId).catch(() => ({ timingMode: 'segment', cues: [] })),
-          clipRenderService.getClipReframe(clipId).catch(() => null),
-        ]);
+      const c = editorData.clip;
+      setClip(c);
+      setTimingMode(captionData.timingMode || editorData.timingMode || 'segment');
+      setCues(captionData.cues || []);
+      setPreviewUrl(editorData.previewUrl || null);
 
-        if (!mounted) return;
+      // Populate editor controls from saved clip configuration
+      setTrimStartOffset(Number(c.trim_start_offset || 0));
+      setTrimEndOffset(Number(c.trim_end_offset || 0));
+      setAspectRatio(c.aspect_ratio || '9:16');
+      setCaptionEnabled(c.caption_enabled !== false);
+      setCaptionStyle(c.caption_style || 'clean');
+      setCaptionPosition(c.caption_position || 'bottom');
 
-        const c = editorData.clip;
-        setClip(c);
-        setTimingMode(captionData.timingMode || editorData.timingMode || 'segment');
-        setCues(captionData.cues || []);
-        setPreviewUrl(editorData.previewUrl || null);
+      const initialConfig: CaptionConfig = {
+        ...(PRESET_CONFIGS[c.caption_style as CaptionStyle] || PRESET_CONFIGS.clean),
+        ...(c.caption_config || {}),
+      };
+      setCaptionConfig(initialConfig);
 
-        // Populate editor controls from saved clip configuration
-        setTrimStartOffset(Number(c.trim_start_offset || 0));
-        setTrimEndOffset(Number(c.trim_end_offset || 0));
-        setAspectRatio(c.aspect_ratio || '9:16');
-        setCaptionEnabled(c.caption_enabled !== false);
-        setCaptionStyle(c.caption_style || 'clean');
-        setCaptionPosition(c.caption_position || 'bottom');
+      setCropConfig(c.crop_config || { mode: 'center', focusX: 0.5, focusY: 0.5 });
+      setOverlayConfig(c.overlay_config || { enabled: false, text: '', position: 'top', size: 'md' });
+      setVolume(c.volume !== undefined ? Number(c.volume) : 1.0);
+      setMuted(Boolean(c.muted));
 
-        const initialConfig: CaptionConfig = {
-          ...(PRESET_CONFIGS[c.caption_style as CaptionStyle] || PRESET_CONFIGS.clean),
-          ...(c.caption_config || {}),
-        };
-        setCaptionConfig(initialConfig);
-
-        setCropConfig(c.crop_config || { mode: 'center', focusX: 0.5, focusY: 0.5 });
-        setOverlayConfig(c.overlay_config || { enabled: false, text: '', position: 'top', size: 'md' });
-        setVolume(c.volume !== undefined ? Number(c.volume) : 1.0);
-        setMuted(Boolean(c.muted));
-
-        if (reframeData) {
-          setReframeStatus(reframeData.status);
-          setDetectedFaceCount(reframeData.detectedFaceCount || 0);
-          setDominantTrackId(reframeData.dominantTrackId);
-          setSmoothedKeyframes(reframeData.smoothedKeyframes || []);
-          setAnalyzedTrimStart(reframeData.analyzedTrimStart ?? 0);
-          setAnalyzedTrimEnd(reframeData.analyzedTrimEnd ?? 0);
-          setAnalyzedAspectRatio(reframeData.analyzedAspectRatio || '9:16');
-        }
-
-        setIsDirty(false);
-      } catch (err: any) {
-        if (mounted) setError(err.message || 'Failed to load clip for editing.');
-      } finally {
-        if (mounted) setLoading(false);
+      if (reframeData) {
+        setReframeStatus(reframeData.status);
+        setDetectedFaceCount(reframeData.detectedFaceCount || 0);
+        setDominantTrackId(reframeData.dominantTrackId);
+        setSmoothedKeyframes(reframeData.smoothedKeyframes || []);
+        setAnalyzedTrimStart(reframeData.analyzedTrimStart ?? 0);
+        setAnalyzedTrimEnd(reframeData.analyzedTrimEnd ?? 0);
+        setAnalyzedAspectRatio(reframeData.analyzedAspectRatio || '9:16');
       }
-    };
 
-    loadData();
-    return () => {
-      mounted = false;
-    };
+      setIsDirty(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load clip for editing.');
+    } finally {
+      setLoading(false);
+    }
   }, [clipId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // High-framerate playback sync loop using requestAnimationFrame
   useEffect(() => {
@@ -349,6 +342,14 @@ export const ClipEditorPage: React.FC = () => {
   const markDirty = () => {
     setIsDirty(true);
   };
+
+  // Keep HTML video element volume and muted properties in sync with editor state
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = muted;
+      videoRef.current.volume = muted ? 0 : Math.min(1.0, Math.max(0, volume));
+    }
+  }, [muted, volume]);
 
   // Helper to interpolate visual crop position in editor preview
   const getCurrentSmartFocusX = (time: number, keyframes: ReframeKeyframe[]): number => {
@@ -653,6 +654,7 @@ export const ClipEditorPage: React.FC = () => {
           if (fresh.render_status === 'ready') {
             clearInterval(pollInterval);
             setIsRendering(false);
+            setIsDirty(false);
             setRenderSuccessMsg(`Rendered successfully as Revision v${fresh.render_version || 1}!`);
 
             // Refresh preview with cache buster
@@ -711,12 +713,20 @@ export const ClipEditorPage: React.FC = () => {
           <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
           <h2 className="text-lg font-semibold text-white mb-2">Error Loading Clip</h2>
           <p className="text-sm text-red-300 mb-6">{error}</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded-lg transition"
-          >
-            Go Back
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => navigate(-1)}
+              className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-sm rounded-lg transition"
+            >
+              Go Back
+            </button>
+            <button
+              onClick={() => loadData()}
+              className="px-4 py-2 bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold rounded-lg transition"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -737,7 +747,7 @@ export const ClipEditorPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h1 className="font-semibold text-sm md:text-base text-white truncate max-w-xs md:max-w-md">
-                Focused Clip Editor
+                Edit Video <span className="text-neutral-400 font-normal">· Focused Clip Editor</span>
               </h1>
               <span className="px-2 py-0.5 text-[11px] font-medium bg-neutral-800 text-neutral-300 rounded border border-neutral-700">
                 v{clip?.render_version || 1}
@@ -749,10 +759,10 @@ export const ClipEditorPage: React.FC = () => {
               )}
             </div>
             <p className="text-[11px] text-neutral-400">
-              {clip?.aspect_ratio} • {effectiveDuration.toFixed(1)}s output • Timing:{' '}
+              Customize captions, framing, headline, and audio before rendering. ({clip?.aspect_ratio} • {effectiveDuration.toFixed(1)}s • Timing:{' '}
               <strong className={timingMode === 'word' ? 'text-emerald-400' : 'text-amber-400'}>
                 {timingMode === 'word' ? 'Precise Word-Level' : 'Segment-Level'}
-              </strong>
+              </strong>)
             </p>
           </div>
         </div>
@@ -899,6 +909,7 @@ export const ClipEditorPage: React.FC = () => {
                 ref={videoRef}
                 src={previewUrl}
                 playsInline
+                muted={muted}
                 onTimeUpdate={handleTimeUpdate}
                 onSeeking={handleTimeUpdate}
                 onSeeked={handleTimeUpdate}
@@ -954,8 +965,11 @@ export const ClipEditorPage: React.FC = () => {
               </div>
             )}
 
-            {/* PRO LIVE CAPTION OVERLAY: Strictly exactly one active cue at any timestamp */}
-            {captionEnabled && activeCue && (
+            {/* PRO LIVE CAPTION OVERLAY: Strictly exactly one active cue at any timestamp
+                When the clip is rendered and has no unsaved edits, the video file already displays
+                the burned-in captions. We only render the live DOM overlay when the user is actively
+                editing (isDirty) or when previewing a non-rendered source, preventing duplicate captions. */}
+            {captionEnabled && activeCue && (isDirty || clip?.render_status !== 'ready' || clip?.caption_enabled === false) && (
               <div
                 onMouseDown={handleCaptionDragStart}
                 onTouchStart={handleCaptionDragStart}

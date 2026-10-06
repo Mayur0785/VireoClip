@@ -38,10 +38,45 @@ export function getUtcBillingResetDate(): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
 }
 
+export function isUserUnlimited(email?: string): boolean {
+  if (!email || !config.devUnlimitedUserEmail) return false;
+  return email.trim().toLowerCase() === config.devUnlimitedUserEmail.trim().toLowerCase();
+}
+
 export class UsageService {
-  static async reserveQuota(userId: string, projectId: string, attemptId: string,
-    estimatedMinutes = 3): Promise<UsageQuotaReservationResult> {
-    const result = await reserveUsage(userId, projectId, attemptId, getCurrentUtcBillingPeriod(), estimatedMinutes);
+  static async reserveQuota(
+    userId: string,
+    projectId: string,
+    attemptId: string,
+    estimatedMinutes = 3,
+    userEmail?: string
+  ): Promise<UsageQuotaReservationResult> {
+    const isUnlimited = isUserUnlimited(userEmail);
+    // Dynamically resolve entitlement if not unlimited developer
+    let entitlementLimit: number | undefined;
+    let entitlementTier: string | undefined;
+
+    if (!isUnlimited) {
+      try {
+        const { SubscriptionService } = await import('./subscriptionService.js');
+        const entitlement = await SubscriptionService.resolveUserEntitlement(userId, userEmail);
+        entitlementLimit = entitlement.monthly_minutes;
+        entitlementTier = entitlement.plan_id;
+      } catch (err) {
+        // Fall back to default
+      }
+    }
+
+    const result = await reserveUsage(
+      userId,
+      projectId,
+      attemptId,
+      getCurrentUtcBillingPeriod(),
+      estimatedMinutes,
+      isUnlimited,
+      entitlementLimit,
+      entitlementTier
+    );
     const remaining = result.remaining_minutes;
     return {
       allowed: result.allowed,
@@ -74,23 +109,44 @@ export class UsageService {
     return cleanupUsage(olderThanMinutes);
   }
 
-  static async getCurrentUsage(userId: string): Promise<UsageBalanceSummary> {
+  static async getCurrentUsage(userId: string, userEmail?: string): Promise<UsageBalanceSummary & { is_unlimited?: boolean }> {
     const period = getCurrentUtcBillingPeriod();
     const balance = await usageBalance(userId, period);
-    const limit = balance?.monthly_minutes_limit ?? config.defaultMonthlyQuotaMinutes;
+    const isUnlimited = isUserUnlimited(userEmail);
+
+    let effectiveLimit = config.defaultMonthlyQuotaMinutes;
+    let effectivePlanTier = 'free';
+
+    if (isUnlimited) {
+      effectiveLimit = 999999;
+      effectivePlanTier = 'developer';
+    } else {
+      try {
+        const { SubscriptionService } = await import('./subscriptionService.js');
+        const entitlement = await SubscriptionService.resolveUserEntitlement(userId, userEmail);
+        effectiveLimit = entitlement.monthly_minutes;
+        effectivePlanTier = entitlement.plan_id;
+      } catch {
+        effectiveLimit = balance?.monthly_minutes_limit ?? config.defaultMonthlyQuotaMinutes;
+        effectivePlanTier = balance?.plan_tier ?? 'free';
+      }
+    }
+
+    const limit = isUnlimited ? 999999 : (balance?.monthly_minutes_limit ?? effectiveLimit);
     const settled = balance?.settled_minutes ?? 0;
     const reserved = balance?.reserved_minutes ?? 0;
     const total = Math.round((settled + reserved) * 100) / 100;
     return {
       billing_period: period,
       reset_date: getUtcBillingResetDate(),
-      plan_tier: balance?.plan_tier ?? 'free',
+      plan_tier: effectivePlanTier,
       limit_minutes: limit,
       settled_minutes: settled,
       reserved_minutes: reserved,
       total_used_minutes: total,
-      remaining_minutes: Math.max(0, Math.round((limit - total) * 100) / 100),
-      is_quota_exceeded: total >= limit,
+      remaining_minutes: isUnlimited ? 999999 : Math.max(0, Math.round((limit - total) * 100) / 100),
+      is_quota_exceeded: isUnlimited ? false : total >= limit,
+      is_unlimited: isUnlimited,
     };
   }
 }

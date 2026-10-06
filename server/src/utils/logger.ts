@@ -46,8 +46,9 @@ function formatLog(entry: LogEntry): string {
     .join(' ');
   const ctxStr = ctx ? ` (${ctx})` : '';
   const detailStr = entry.detail !== undefined ? ` ${typeof entry.detail === 'object' ? JSON.stringify(entry.detail) : entry.detail}` : '';
+  const reasonStr = entry.reason ? ` [Reason: ${entry.reason}]` : '';
   const errorStr = entry.error ? ` [Error: ${entry.error}]` : '';
-  return `${tag} ${ts}${ctxStr} ${entry.message}${detailStr}${errorStr}`;
+  return `${tag} ${ts}${ctxStr} ${entry.message}${detailStr}${reasonStr}${errorStr}`;
 }
 
 function createLogEntry(

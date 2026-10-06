@@ -27,7 +27,30 @@ test('Mongo repositories, ownership, indexes, and quota concurrency', { timeout:
   const dir = await mkdtemp(path.join(os.tmpdir(), 'vireo-mongo-test-'));
   const mongo = spawn('mongod', ['--dbpath', dir, '--port', String(port), '--bind_ip', '127.0.0.1',
     '--replSet', 'vireo_test_rs', '--quiet', '--logpath', path.join(dir, 'mongod.log')], { stdio: 'ignore' });
-  t.after(async () => { mongo.kill('SIGTERM'); await rm(dir, { recursive: true, force: true }); });
+  t.after(async () => {
+    await new Promise<void>((resolve) => {
+      mongo.once('exit', () => resolve());
+      mongo.kill('SIGTERM');
+      setTimeout(() => {
+        try { mongo.kill('SIGKILL'); } catch {}
+        resolve();
+      }, 3000);
+    });
+    // Retry rm on Windows in case files take a moment to unlock
+    for (let i = 0; i < 10; i++) {
+      try {
+        await rm(dir, { recursive: true, force: true });
+        break;
+      } catch (err: any) {
+        if (err.code === 'EBUSY' && i < 9) {
+          await new Promise((r) => setTimeout(r, 200));
+        } else {
+          // If still busy, suppress error in temp cleanup so test status reflects assertion results
+          break;
+        }
+      }
+    }
+  });
 
   const directUri = `mongodb://127.0.0.1:${port}/?directConnection=true`;
   let admin: MongoClient | undefined;

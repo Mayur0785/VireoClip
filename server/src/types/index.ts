@@ -158,11 +158,14 @@ export interface ContentOutputRecord {
 }
 
 export interface CreatorProfileData {
+  brand_name?: string;
   niche?: string;
   target_audience?: string;
+  brand_description?: string;
   language?: string;
   tone?: string;
   custom_tone?: string;
+  content_goals?: string;
   website_url?: string;
   newsletter_url?: string;
   podcast_url?: string;
@@ -321,6 +324,10 @@ export interface RenderJobRecord {
   progress: number;
   stage: RenderJobStage | string;
   attempts: number;
+  max_attempts?: number;
+  worker_id?: string | null;
+  locked_at?: string | Date | null;
+  next_retry_at?: string | Date | null;
   error_code?: string | null;
   error_message?: string | null;
   started_at?: string | null;
@@ -361,6 +368,8 @@ export interface ClipRecord {
   muted?: boolean;
   editor_version?: number;
   render_version?: number;
+  reframe_mode?: 'smart' | 'fallback_center' | 'manual';
+  reframe_metadata?: Record<string, any>;
 }
 
 export interface CreateClipDTO {
@@ -536,4 +545,380 @@ export interface ReframeTrackRecord {
   updated_at: string;
 }
 
+// ── Social OAuth & Account Connections (Phase 9) ──────────────────
+export type SocialPlatform = 'youtube' | 'instagram' | 'tiktok' | 'linkedin' | 'x';
+
+export const VALID_SOCIAL_PLATFORMS: readonly SocialPlatform[] = [
+  'youtube',
+  'instagram',
+  'tiktok',
+  'linkedin',
+  'x',
+] as const;
+
+export type SocialConnectionStatus = 'connected' | 'expired' | 'revoked' | 'error';
+
+export interface SocialAccountConnectionRecord {
+  id: string;
+  user_id: string;
+  provider: SocialPlatform;
+  provider_account_id: string;
+  provider_account_name: string;
+  provider_username?: string | null;
+  provider_avatar_url?: string | null;
+  access_token: string; // Encrypted AES-256-GCM
+  refresh_token?: string | null; // Encrypted AES-256-GCM
+  token_expires_at?: Date | null;
+  scopes: string[];
+  status: SocialConnectionStatus;
+  metadata?: Record<string, any>;
+  last_verified_at?: Date | null;
+  last_error_at?: Date | null;
+  last_error_code?: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/** Safe projection returned to frontend (NO sensitive token data) */
+export interface SafeSocialAccountConnection {
+  id: string;
+  provider: SocialPlatform;
+  account_name: string;
+  username?: string | null;
+  avatar_url?: string | null;
+  status: SocialConnectionStatus;
+  scopes: string[];
+  connected_at: string;
+  last_verified_at?: string | null;
+  is_configured: boolean;
+}
+
+export interface OAuthStateRecord {
+  id: string;
+  user_id: string;
+  provider: SocialPlatform;
+  state_hash: string;
+  code_verifier?: string; // Optional PKCE verifier (for X/Twitter)
+  redirect_uri: string;
+  expires_at: Date;
+  consumed_at?: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// ── Phase 10: Publishing & Scheduling ──────────────────────────────
+export type PublishStatus = 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed' | 'cancelled';
+export type PublishType = 'now' | 'scheduled';
+
+export const VALID_PUBLISH_STATUSES: readonly PublishStatus[] = [
+  'draft',
+  'scheduled',
+  'publishing',
+  'published',
+  'failed',
+  'cancelled',
+] as const;
+
+export const VALID_PUBLISH_TYPES: readonly PublishType[] = ['now', 'scheduled'] as const;
+
+export interface PublishPayload {
+  title?: string;
+  description?: string;
+  caption?: string;
+  tags?: string[];
+  hashtags?: string[];
+  privacy?: 'public' | 'unlisted' | 'private';
+  platform_custom?: Record<string, any>;
+}
+
+export interface PublishedPostRecord {
+  id: string;
+  user_id: string;
+  project_id: string;
+  clip_id?: string | null;
+  content_output_id?: string | null;
+  social_connection_id: string;
+  provider: SocialPlatform;
+  provider_account_id: string;
+  provider_post_id?: string | null;
+  provider_post_url?: string | null;
+  status: PublishStatus;
+  publish_type: PublishType;
+  scheduled_for?: Date | null;
+  timezone?: string | null;
+  published_at?: Date | null;
+  failed_at?: Date | null;
+  cancelled_at?: Date | null;
+  retry_count: number;
+  last_error_code?: string | null;
+  last_error_message?: string | null;
+  request_fingerprint: string;
+  payload: PublishPayload;
+  metadata?: Record<string, any>;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export type PublishJobStatus = 'scheduled' | 'publishing' | 'completed' | 'failed' | 'cancelled';
+
+export interface PublishJobRecord {
+  id: string;
+  user_id: string;
+  published_post_id: string;
+  scheduled_for: Date;
+  status: PublishJobStatus;
+  attempts: number;
+  locked_at?: Date | null;
+  started_at?: Date | null;
+  completed_at?: Date | null;
+  next_retry_at?: Date | null;
+  last_error?: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface PublishPreviewResult {
+  valid: boolean;
+  provider: SocialPlatform;
+  account_name: string;
+  account_username?: string | null;
+  platform_requirements: {
+    max_title_length?: number;
+    max_description_length?: number;
+    supported_media_formats: string[];
+    max_video_duration_seconds?: number;
+    max_video_size_bytes?: number;
+  };
+  normalized_payload: PublishPayload;
+  media_metadata?: {
+    clip_id?: string | null;
+    duration_seconds?: number;
+    aspect_ratio?: string;
+    render_status?: string;
+  };
+  warnings: string[];
+}
+
+// ── Phase 11: Billing, Plans & Subscriptions Types ────────────────
+
+// ── Phase 11: Billing, Plans & Subscriptions Types ────────────────
+
+export type BillingProviderName = 'paddle' | 'razorpay' | 'stripe';
+
+export type PlanId = 'free' | 'creator' | 'pro' | 'studio';
+
+export type BillingInterval = 'month' | 'year';
+
+export type SubscriptionStatus =
+  | 'incomplete'
+  | 'trialing'
+  | 'active'
+  | 'past_due'
+  | 'unpaid'
+  | 'canceled'
+  | 'paused'
+  | 'incomplete_expired';
+
+export interface PlanDefinition {
+  id: PlanId;
+  display_name: string;
+  monthly_price: number; // Global USD
+  yearly_price: number;
+  inr_monthly_price: number; // India INR
+  currency: string;
+  monthly_minutes: number;
+  max_projects: number;
+  max_clip_renders: number;
+  max_social_connections: number;
+  max_scheduled_posts: number;
+  features: string[];
+  is_recommended?: boolean;
+  paddle_price_id_monthly?: string;
+  paddle_price_id_yearly?: string;
+  razorpay_plan_id_monthly?: string;
+  razorpay_plan_id_yearly?: string;
+  stripe_price_id?: string;
+}
+
+export interface BillingCustomerRecord {
+  id: string;
+  user_id: string;
+  provider: BillingProviderName;
+  provider_customer_id: string;
+  email: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface SubscriptionRecord {
+  id: string;
+  user_id: string;
+  provider: BillingProviderName;
+  provider_customer_id: string;
+  provider_subscription_id: string;
+  provider_product_id?: string | null;
+  provider_price_id?: string | null;
+  plan_id: PlanId;
+  status: SubscriptionStatus;
+  currency?: string;
+  amount?: number;
+  billing_interval: BillingInterval;
+  current_period_start: Date;
+  current_period_end: Date;
+  cancel_at_period_end: boolean;
+  canceled_at?: Date | null;
+  trial_start?: Date | null;
+  trial_end?: Date | null;
+  latest_invoice_id?: string | null;
+  scheduled_change?: Record<string, unknown> | null;
+  last_provider_event_id?: string | null;
+  last_provider_event_at?: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface BillingEventRecord {
+  id: string;
+  provider: BillingProviderName;
+  provider_event_id: string;
+  event_type: string;
+  processed_at: Date;
+  status: 'processed' | 'failed' | 'ignored';
+  payload_hash?: string;
+  error_code?: string | null;
+  error_message?: string | null;
+  created_at: Date;
+}
+
+export interface BillingInvoiceRecord {
+  id: string;
+  user_id: string;
+  provider: BillingProviderName;
+  provider_invoice_id: string;
+  provider_customer_id: string;
+  subscription_id?: string | null;
+  amount_due: number;
+  amount_paid: number;
+  currency: string;
+  status: 'paid' | 'open' | 'void' | 'uncollectible' | 'draft';
+  hosted_invoice_url?: string | null;
+  invoice_pdf_url?: string | null;
+  period_start: Date;
+  period_end: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface UserEntitlement {
+  plan_id: PlanId | 'developer';
+  display_name: string;
+  is_unlimited: boolean;
+  monthly_minutes: number;
+  max_projects: number;
+  max_clip_renders: number;
+  max_social_connections: number;
+  max_scheduled_posts: number;
+  subscription?: {
+    id: string;
+    provider: BillingProviderName;
+    status: SubscriptionStatus;
+    cancel_at_period_end: boolean;
+    current_period_end: string;
+    billing_interval: BillingInterval;
+  } | null;
+}
+
+// ── Phase 15: Vireo Analytics & Growth Intelligence ───────────────
+
+export interface PostMetrics {
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  saves: number;
+  watch_time_seconds?: number | null;
+  average_watch_time_seconds?: number | null;
+  impressions?: number | null;
+  reach?: number | null;
+  clicks?: number | null;
+  followers_gained?: number | null;
+  engagement_rate?: number; // Calculated (likes + comments + shares + saves) / max(views, 1)
+}
+
+export type SyncStatus = 'synced' | 'failed' | 'not_supported' | 'not_configured';
+
+export interface ContentAnalyticsRecord {
+  id: string;
+  user_id: string;
+  project_id: string;
+  clip_id?: string | null;
+  published_post_id: string;
+  social_connection_id?: string | null;
+  provider: SocialPlatform;
+  provider_post_id: string;
+  platform: SocialPlatform;
+  captured_at: Date;
+  published_at?: Date | null;
+  metrics: PostMetrics;
+  previous_metrics?: PostMetrics | null;
+  sync_status: SyncStatus;
+  last_error?: string | null;
+  metadata?: Record<string, any>;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export type MemoryCategory = 'topic' | 'hook' | 'duration' | 'platform' | 'format' | 'cta' | 'posting_time';
+export type MemoryConfidence = 'low' | 'medium' | 'high';
+
+export interface ContentMemoryRecord {
+  id: string;
+  user_id: string;
+  category: MemoryCategory;
+  pattern: string;
+  evidence: string;
+  confidence: MemoryConfidence;
+  sample_size: number;
+  performance_multiplier?: number; // e.g. 1.35 = 35% higher engagement than avg
+  metadata?: Record<string, any>;
+  first_seen: Date;
+  last_updated: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface GrowthRecommendation {
+  id: string;
+  category: 'working' | 'try' | 'avoid' | 'next_idea';
+  title: string;
+  recommendation: string;
+  evidence: string;
+  confidence: MemoryConfidence;
+  supporting_metrics: Record<string, any>;
+  platform?: SocialPlatform | 'all';
+}
+
+export interface AnalyticsOverview {
+  total_views: number;
+  total_engagement: number;
+  average_engagement_rate: number;
+  total_watch_time_seconds: number;
+  total_published_posts: number;
+  followers_gained: number;
+  best_performing_clip?: {
+    clip_id: string;
+    project_id: string;
+    title: string;
+    views: number;
+    engagement: number;
+    platform: SocialPlatform;
+  } | null;
+  best_performing_platform?: SocialPlatform | null;
+  period_change?: {
+    views_change_pct: number | null;
+    engagement_change_pct: number | null;
+    posts_change: number;
+  } | null;
+  has_sufficient_data: boolean;
+}
 

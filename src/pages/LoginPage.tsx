@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/AuthLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +45,25 @@ export const LoginPage: React.FC = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      setErrorMessage('Please enter your email address to receive password reset instructions.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/settings`,
+      });
+      if (error) throw error;
+      setInfoMessage('Password reset instructions sent. Please check your inbox.');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Could not send reset email.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleGoogleOAuth = async () => {
     setErrorMessage(null);
     if (!isConfigured) {
@@ -67,16 +86,97 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  return <AuthLayout title="Welcome back">
-    {errorMessage && <p role="alert" className="mt-6 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</p>}
-    {infoMessage && <p role="status" className="mt-6 rounded-xl bg-[#e8f3e9] p-3 text-sm text-forest">{infoMessage}</p>}
-    <Button type="button" variant="outline" className="mt-8 h-12 w-full" onClick={handleGoogleOAuth}><GoogleIcon />Continue with Google</Button>
-    <div className="my-6 flex items-center gap-4 text-sm text-muted-foreground"><span className="h-px flex-1 bg-border" />or continue with email<span className="h-px flex-1 bg-border" /></div>
-    <form onSubmit={handleSubmit} className="space-y-5">
-      <Input label="Email address" type="email" required autoComplete="email" placeholder="you@company.com" value={email} onChange={e=>setEmail(e.target.value)} />
-      <div className="relative"><Input label="Password" type={showPassword?'text':'password'} required minLength={6} autoComplete="current-password" placeholder="Enter your password" value={password} onChange={e=>setPassword(e.target.value)} /><button type="button" onClick={()=>setShowPassword(!showPassword)} aria-label={showPassword?'Hide password':'Show password'} className="absolute bottom-2 right-2 rounded-lg p-2 text-muted-foreground">{showPassword?<EyeOff className="size-4"/>:<Eye className="size-4"/>}</button></div>
-      <Button type="submit" variant="clay" size="lg" className="w-full" disabled={busy}>{busy?'Signing in…':'Sign in'}</Button>
-    </form>
-    <p className="mt-6 text-center text-sm text-muted-foreground">New to Vireo? <Link to="/signup" className="font-semibold text-clay hover:underline">Create an account</Link></p>
-  </AuthLayout>;
+  return (
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to your account and keep creating amazing videos with Vireo."
+    >
+      {errorMessage && (
+        <p role="alert" className="mt-6 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
+          {errorMessage}
+        </p>
+      )}
+      {infoMessage && (
+        <p role="status" className="mt-6 rounded-xl bg-[#e8f3e9] p-3 text-sm text-vireo-green">
+          {infoMessage}
+        </p>
+      )}
+
+      <Button
+        type="button"
+        variant="outline"
+        className="mt-6 h-12 w-full gap-2.5 font-medium border-border/80 hover:bg-cream"
+        onClick={handleGoogleOAuth}
+      >
+        <GoogleIcon />
+        <span>Continue with Google</span>
+      </Button>
+
+      <div className="my-6 flex items-center gap-4 text-xs uppercase tracking-wider text-muted-foreground font-mono">
+        <span className="h-px flex-1 bg-border" />
+        or continue with email
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          label="Email address"
+          type="email"
+          required
+          autoComplete="email"
+          placeholder="you@company.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+
+        <div className="relative">
+          <Input
+            label="Password"
+            type={showPassword ? 'text' : 'password'}
+            required
+            minLength={6}
+            autoComplete="current-password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            rightLabel={
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                className="text-xs font-semibold text-clay hover:underline focus:outline-none"
+              >
+                Forgot password?
+              </button>
+            }
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute bottom-2 right-2 rounded-lg p-2 text-muted-foreground hover:text-foreground"
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
+
+        <Button
+          type="submit"
+          variant="clay"
+          size="lg"
+          className="w-full gap-2 shadow-clay mt-2"
+          disabled={busy}
+        >
+          <span>{busy ? 'Signing in…' : 'Sign in'}</span>
+          <ArrowRight className="size-4" />
+        </Button>
+      </form>
+
+      <p className="mt-6 text-center text-sm text-muted-foreground">
+        Don't have an account?{' '}
+        <Link to="/signup" className="font-semibold text-clay hover:underline">
+          Sign up for free
+        </Link>
+      </p>
+    </AuthLayout>
+  );
 };

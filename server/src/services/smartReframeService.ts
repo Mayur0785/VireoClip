@@ -161,6 +161,9 @@ export class SmartReframeService {
           tracks.set(newTrackId, [face]);
         }
       }
+
+      // Propagate validated and track-identified faces back to the sample
+      sample.faces = validFaces;
     }
 
     return { tracks, faceCount: tracks.size };
@@ -419,16 +422,17 @@ export class SmartReframeService {
     }
 
     const clampedExpr = `min(max(${expr}\\,0)\\,1)`;
+    const centeredCropExpr = `min(max(in_w*${clampedExpr}-out_w/2\\,0)\\,in_w-out_w)`;
 
     switch (aspectRatio) {
       case '9:16':
-        return `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:'(in_w-out_w)*${clampedExpr}':0`;
+        return `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:'${centeredCropExpr}':0`;
       case '1:1':
-        return `scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080:'(in_w-out_w)*${clampedExpr}':0`;
+        return `scale=1080:1080:force_original_aspect_ratio=increase,crop=1080:1080:'${centeredCropExpr}':0`;
       case '16:9':
-        return `scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080:'(in_w-out_w)*${clampedExpr}':0`;
+        return `scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080:'${centeredCropExpr}':0`;
       default:
-        return `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:'(in_w-out_w)*${clampedExpr}':0`;
+        return `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:'${centeredCropExpr}':0`;
     }
   }
 
@@ -468,8 +472,13 @@ export class SmartReframeService {
     if (process.env.PYTHON_PATH && fs.existsSync(process.env.PYTHON_PATH)) {
       return process.env.PYTHON_PATH;
     }
-    // Check project venvs
+    // Check project venvs and embedded python distributions (Windows and POSIX)
     const candidates = [
+      path.resolve(process.cwd(), 'python_embed/python.exe'),
+      path.resolve(process.cwd(), 'server/python_embed/python.exe'),
+      path.resolve(process.cwd(), '../server/python_embed/python.exe'),
+      path.resolve(process.cwd(), 'server/python/.venv/Scripts/python.exe'),
+      path.resolve(process.cwd(), 'python/.venv/Scripts/python.exe'),
       path.resolve(process.cwd(), 'server/python/.venv/bin/python'),
       path.resolve(process.cwd(), 'python/.venv/bin/python'),
       path.resolve(process.cwd(), '../server/python/.venv/bin/python'),
@@ -479,7 +488,7 @@ export class SmartReframeService {
     ];
 
     for (const c of candidates) {
-      if (c.startsWith('/') && fs.existsSync(c)) {
+      if ((c.includes('/') || c.includes('\\')) && fs.existsSync(c)) {
         return c;
       }
     }
@@ -510,15 +519,16 @@ export class SmartReframeService {
       throw err;
     }
 
-    const scriptPath = path.resolve(
-      process.cwd(),
-      fs.existsSync(path.resolve(process.cwd(), 'server/python/smart_reframe.py'))
-        ? 'server/python/smart_reframe.py'
-        : 'python/smart_reframe.py'
-    );
+    const scriptCandidates = [
+      path.resolve(process.cwd(), 'server/python/smart_reframe.py'),
+      path.resolve(process.cwd(), 'python/smart_reframe.py'),
+      path.resolve(process.cwd(), '../server/python/smart_reframe.py'),
+    ];
 
-    if (!fs.existsSync(scriptPath)) {
-      const err = new Error(`Smart reframe Python script not found at ${scriptPath}`);
+    const scriptPath = scriptCandidates.find((s) => fs.existsSync(s));
+
+    if (!scriptPath) {
+      const err = new Error(`Smart reframe Python script not found at candidate locations: ${scriptCandidates.join(', ')}`);
       (err as any).code = 'SCRIPT_NOT_FOUND';
       throw err;
     }

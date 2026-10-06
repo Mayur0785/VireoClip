@@ -8,7 +8,6 @@ import {
   Pencil,
   Video,
   Link2,
-  FileCheck2,
   FileText,
   Calendar,
   Loader2,
@@ -19,11 +18,15 @@ import {
   Globe,
   ChevronDown,
   ChevronUp,
-  UploadCloud,
   CircleCheck,
   SlidersHorizontal,
   RotateCcw,
   Film,
+  Lock,
+  Play,
+  Hash,
+  Image as ImageIcon,
+  Send,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -39,6 +42,7 @@ import { GenerationProgress } from '../components/react-bits/GenerationProgress'
 import { SpotlightCard } from '../components/react-bits/SpotlightCard';
 import { QuotaExceededModal } from '../components/QuotaExceededModal';
 import { ClipWorkspace } from '../components/clips/ClipWorkspace';
+import { PublishModal } from '../components/PublishModal';
 
 interface TabConfig {
   key: OutputPlatform;
@@ -135,12 +139,12 @@ export const ProjectDetailPage: React.FC = () => {
   useEffect(() => {
     let active = true;
     setVideoPreviewUrl(null);
-    if (project?.source_type !== 'upload' || !project.source_url) return;
+    if (!project?.source_url) return;
     backendRequest<{ signedUrl: string }>(`/projects/${project.id}/source-preview-url`).then((data) => {
       if (active) setVideoPreviewUrl(data.signedUrl || null);
     }).catch(() => { if (active) setVideoPreviewUrl(null); });
     return () => { active = false; };
-  }, [project?.source_type, project?.source_url]);
+  }, [project?.source_url]);
 
   const handleGenerateContent = async (targetPlatform?: OutputPlatform) => {
     if (!id) return;
@@ -213,7 +217,7 @@ export const ProjectDetailPage: React.FC = () => {
   useEffect(() => {
     if (!project || !id || hasAttemptedAutoStart.current) return;
     const currentStatus = project.video_status || project.status;
-    if (currentStatus === 'uploaded' && project.source_type === 'upload' && project.source_url) {
+    if (currentStatus === 'uploaded' && project.source_url) {
       hasAttemptedAutoStart.current = true;
       projectService.startProcessing(id).catch((err: any) => {
         if (err.status === 403 || err.error_code === 'QUOTA_EXCEEDED') {
@@ -230,13 +234,13 @@ export const ProjectDetailPage: React.FC = () => {
         console.warn('Auto-start processing notice:', err.message);
       });
     }
-  }, [id, project?.video_status, project?.status, project?.source_type, project?.source_url]);
+  }, [id, project?.video_status, project?.status, project?.source_url]);
 
   // Polling loop while processing or transcribing or generating
   useEffect(() => {
     if (!id || !project) return;
     const currentStatus = project.video_status || project.status;
-    const active = isProcessing(currentStatus) && project.source_type !== 'url';
+    const active = isProcessing(currentStatus);
 
     if (!active) return;
 
@@ -355,12 +359,6 @@ export const ProjectDetailPage: React.FC = () => {
         </Button>
       </div>
 
-      {isUrl && !['transcribed','completed','complete'].includes(statusVal) && (
-        <div className="rounded-2xl border border-[#f2dacd] bg-[#fff6f0] p-5 text-sm text-[#813d22]">
-          Video URL processing is not available for this project. Upload the video file to create a transcript and content kit.
-          <Link to="/projects/new" className="ml-2 font-semibold underline">Upload a video</Link>
-        </div>
-      )}
 
       {/* Quota Exceeded Modal & Alert */}
       {quotaError && (
@@ -445,70 +443,104 @@ export const ProjectDetailPage: React.FC = () => {
         /* Video Uploaded / Processing / Transcribed State */
         <div className="space-y-6">
           {/* Main Video / Processing Card */}
-          {!['transcribed','completed','complete'].includes(statusVal) && <div className="card-soft p-6 md:p-8 space-y-6 bg-card border-border/80">
-            <div><h2 className="font-display text-2xl font-semibold">Processing Your Video</h2><p className="mt-1 text-sm text-muted-foreground">Your video moves through each stage automatically. You can return to this page later.</p></div>
-            <div className="grid grid-cols-2 gap-3 border-b border-border pb-6 sm:grid-cols-5">{[
-              { key:'uploaded', label:'Uploaded', icon:UploadCloud },
-              { key:'processing', label:'Processing', icon:Video },
-              { key:'transcribing', label:'Transcribing', icon:Volume2 },
-              { key:'generating', label:'Generating', icon:Sparkles },
-              { key:'complete', label:'Complete', icon:CircleCheck },
-            ].map((step,index)=>{const current=['uploading','uploaded','queued','processing','transcribing','analyzing','generating','transcribed','complete','completed'].indexOf(statusVal);const stage=[1,3,4,6,8][index];const done=current>stage;const active=current===stage || (index===1&&statusVal==='queued') || (index===3&&statusVal==='analyzing');return <div key={step.key} className="text-center"><span className={`mx-auto grid size-10 place-items-center rounded-full border ${done?'border-vireo-green bg-vireo-green text-white':active?'border-clay bg-clay text-white':'border-border bg-[#f7f8f7] text-muted-foreground'}`}><step.icon className="size-5"/></span><p className="mt-2 text-sm font-semibold">{step.label}</p><p className="text-xs text-muted-foreground">{done?'Complete':active?'In progress':'Pending'}</p></div>})}</div>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border/60">
-              <div className="flex items-center gap-3.5">
-                <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
-                    statusVal === 'transcribed'
-                      ? 'bg-sage/15 text-sage'
-                      : isProcessing(statusVal)
-                      ? 'bg-clay/15 text-clay'
-                      : 'bg-sage/15 text-sage'
-                  }`}
-                >
-                  {isProcessing(statusVal) ? (
-                    <Loader2 className="size-6 animate-spin" />
-                  ) : statusVal === 'transcribed' ? (
-                    <Sparkles className="size-6 text-clay" />
-                  ) : (
-                    <FileCheck2 className="size-6" />
-                  )}
-                </div>
+          {!['transcribed', 'completed', 'complete'].includes(statusVal) && (
+            <div className="card-soft p-6 md:p-8 space-y-8 bg-card border-border/80 shadow-soft">
+              {/* Card Header with Estimated Time */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-lg font-semibold font-display text-foreground">
-                    {statusVal === 'transcribed'
-                      ? 'Transcription complete'
-                      : statusVal === 'transcribing'
-                      ? 'Transcribing audio…'
-                      : statusVal === 'processing'
-                      ? 'Processing video…'
-                      : isUploaded
-                      ? 'Video uploaded successfully'
-                      : isUrl
-                      ? 'Video URL linked'
-                      : 'Video uploading'}
+                  <h2 className="font-display text-2xl font-semibold text-foreground tracking-tight">
+                    Processing Your Video
                   </h2>
-                  <p className="text-xs sm:text-sm text-muted-foreground">
-                    {statusVal === 'transcribed'
-                      ? 'Audio transcribed and ready for content generation.'
-                      : statusVal === 'transcribing'
-                      ? 'Extracting speech and generating timestamped segments.'
-                      : statusVal === 'processing'
-                      ? 'Retrieving media from private storage.'
-                      : isUploaded
-                      ? 'Stored securely in private storage.'
-                      : isUrl
-                      ? 'External video source registered.'
-                      : 'File is being transferred to storage.'}
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This usually takes 2–5 minutes. You can leave this page — we'll notify you when it's ready.
                   </p>
                 </div>
+                <div className="inline-flex items-center gap-3 rounded-2xl border border-sage/30 bg-sage/10 px-4 py-2.5 shrink-0 self-start sm:self-auto">
+                  <div className="grid size-9 place-items-center rounded-full bg-sage/20 text-vireo-green">
+                    <Clock className="size-4" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Estimated time remaining</p>
+                    <p className="text-base font-bold font-display text-foreground leading-tight">~2 minutes</p>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {isUploaded && !isProcessing(statusVal) && (
+
+              {/* Connected Stepper */}
+              <div className="pt-2">
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-5 relative">
+                  {[
+                    { key: 'uploaded', label: 'Uploaded', desc: 'Completed', icon: CircleCheck },
+                    { key: 'processing', label: 'Processing', desc: 'Analyzing video, extracting audio…', icon: Video },
+                    { key: 'transcribing', label: 'Transcribing', desc: 'Converting speech to text…', icon: Volume2 },
+                    { key: 'generating', label: 'Generating', desc: 'Creating chapters, hooks and assets…', icon: Sparkles },
+                    { key: 'complete', label: 'Complete', desc: 'Your content will be ready soon!', icon: CircleCheck },
+                  ].map((step, index) => {
+                    const current = ['uploading', 'uploaded', 'queued', 'processing', 'transcribing', 'analyzing', 'generating', 'transcribed', 'complete', 'completed'].indexOf(statusVal);
+                    const stage = [1, 3, 4, 6, 8][index];
+                    const done = current > stage;
+                    const active = current === stage || (index === 1 && statusVal === 'queued') || (index === 3 && statusVal === 'analyzing');
+
+                    return (
+                      <div key={step.key} className="text-center relative flex flex-col items-center">
+                        <span
+                          className={`grid size-11 place-items-center rounded-full border-2 transition-all ${
+                            done
+                              ? 'border-vireo-green bg-vireo-green text-white shadow-sm'
+                              : active
+                              ? 'border-clay bg-clay text-white shadow-sm ring-4 ring-clay/20 animate-pulse'
+                              : 'border-border bg-[#f8f9f8] text-muted-foreground'
+                          }`}
+                        >
+                          <step.icon className="size-5" />
+                        </span>
+                        <p className="mt-3 text-sm font-semibold text-foreground font-display">{step.label}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+                          {done ? (index === 0 ? 'Completed' : 'Finished') : active ? step.desc : 'Pending'}
+                        </p>
+                        {(done || active) && (
+                          <span className="mt-1 text-[11px] font-mono text-muted-foreground/80">
+                            {new Date(project.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Error if any */}
+              {actionError && (
+                <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
+                    <div className="text-xs sm:text-sm">
+                      <span className="font-semibold text-destructive">Processing notice:</span>{' '}
+                      <span className="text-foreground">{actionError}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActionError(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground font-medium underline shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* Manual trigger button if uploaded and idle */}
+              {isUploaded && !isProcessing(statusVal) && (
+                <div className="flex items-center justify-between p-4 rounded-xl border border-clay/30 bg-clay/5">
+                  <div className="text-xs sm:text-sm text-foreground">
+                    <span className="font-semibold">Ready to start processing:</span> Audio extraction, transcription, and AI content kits are queued.
+                  </div>
                   <Button
                     size="sm"
                     variant="clay"
                     disabled={isRetrying}
                     onClick={handleRetryProcessing}
+                    className="shrink-0"
                   >
                     {isRetrying ? (
                       <Loader2 className="size-3.5 animate-spin mr-1" />
@@ -517,114 +549,225 @@ export const ProjectDetailPage: React.FC = () => {
                     )}
                     {isRetrying ? 'Starting…' : 'Start Processing'}
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
+          )}
 
-            {/* Error Banner if processing failed to start */}
-            {actionError && (
-              <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2.5">
-                  <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
-                  <div className="text-xs sm:text-sm">
-                    <span className="font-semibold text-destructive">Processing error:</span>{' '}
-                    <span className="text-foreground">{actionError}</span>
+          {/* Live Activity & Locked Placeholders Grid */}
+          {!['transcribed', 'completed', 'complete'].includes(statusVal) && (
+            <div className="grid gap-6 lg:grid-cols-12">
+              {/* Left Column: Live Activity */}
+              <section className="card-soft p-6 lg:col-span-5 bg-card border-border/80 shadow-soft space-y-5">
+                <div className="flex items-center justify-between pb-3 border-b border-border/70">
+                  <h3 className="font-display text-lg font-semibold text-foreground">Live Activity</h3>
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-sage/10 text-vireo-green border border-sage/30">
+                    <span className="size-1.5 rounded-full bg-vireo-green animate-pulse" />
+                    Processing
+                  </span>
+                </div>
+
+                <div className="space-y-5 relative">
+                  {/* Item 1: Upload */}
+                  <div className="flex items-start gap-3.5">
+                    <span className="grid size-8 place-items-center rounded-full bg-sage/20 text-vireo-green shrink-0 mt-0.5">
+                      <Check className="size-4 stroke-[2.5]" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">Video uploaded successfully</p>
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">
+                          {new Date(project.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {project.source_url ? project.source_url.split('/').pop() : 'video.mp4'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 2: Processing */}
+                  <div className="flex items-start gap-3.5">
+                    <span className="grid size-8 place-items-center rounded-full bg-clay/15 text-clay shrink-0 mt-0.5">
+                      {isProcessing(statusVal) ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Check className="size-4 stroke-[2.5]" />
+                      )}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">Processing video</p>
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">
+                          {new Date(project.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <ul className="text-xs text-muted-foreground space-y-0.5 mt-1 list-disc list-inside">
+                        <li>Analyzing video quality</li>
+                        <li>Extracting audio tracks</li>
+                        <li>Preparing for transcription…</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  {/* Item 3: Transcribing */}
+                  <div className="flex items-start gap-3.5">
+                    <span className={`grid size-8 place-items-center rounded-full shrink-0 mt-0.5 ${
+                      statusVal === 'transcribing' ? 'bg-clay/15 text-clay' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {statusVal === 'transcribing' ? <Loader2 className="size-4 animate-spin" /> : <Clock className="size-4" />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">Transcribing audio</p>
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">
+                          {statusVal === 'transcribing' ? 'In progress' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Converting speech to text with high accuracy…
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 4: Generating */}
+                  <div className="flex items-start gap-3.5">
+                    <span className={`grid size-8 place-items-center rounded-full shrink-0 mt-0.5 ${
+                      statusVal === 'generating' ? 'bg-clay/15 text-clay' : 'bg-muted text-muted-foreground'
+                    }`}>
+                      {statusVal === 'generating' ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">Generating content</p>
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">
+                          {statusVal === 'generating' ? 'In progress' : 'Pending'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Creating chapters, key moments, titles…
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Item 5: Complete */}
+                  <div className="flex items-start gap-3.5">
+                    <span className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground shrink-0 mt-0.5">
+                      <CircleCheck className="size-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-semibold text-foreground">Complete</p>
+                        <span className="text-xs text-muted-foreground font-mono shrink-0">Pending</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Your video and assets will be ready soon!
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActionError(null)}
-                  className="text-xs text-muted-foreground hover:text-foreground font-medium underline shrink-0"
-                >
-                  Dismiss
-                </button>
-              </div>
-            )}
-
-            {/* Processing Banner if currently active */}
-            {isProcessing(statusVal) && (
-              <div className="p-4 rounded-xl bg-accent/20 border border-accent/40 flex items-center gap-3">
-                <Loader2 className="size-5 text-accent-foreground animate-spin shrink-0" />
-                <div className="text-xs sm:text-sm">
-                  <span className="font-semibold text-foreground">Pipeline in progress:</span>{' '}
-                  <span className="text-muted-foreground">
-                    {statusVal === 'transcribing'
-                      ? 'Running Whisper transcription on audio track...'
-                      : 'Preparing media and validating file structure...'}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {/* Metadata Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              <div className="rounded-2xl bg-cream/60 p-4 border border-border/60 space-y-1">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Source Type
-                </span>
-                <p className="text-sm font-medium text-foreground capitalize flex items-center gap-1.5">
-                  {isUrl ? <Link2 className="size-3.5 text-clay" /> : <Video className="size-3.5 text-sage" />}
-                  {project.source_type || (isUrl ? 'URL' : 'Upload')}
-                </p>
-              </div>
-
-              {!isUrl && project.source_url && (
-                <div className="rounded-2xl bg-cream/60 p-4 border border-border/60 space-y-1">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Original File
-                  </span>
-                  <p className="text-sm font-medium text-foreground truncate" title={project.source_url.split('/').pop() || 'video.mp4'}>
-                    {project.source_url.split('/').pop() || 'video.mp4'}
-                  </p>
-                </div>
-              )}
-
-
-              {isUrl && project.source_url && (
-                <div className="rounded-2xl bg-cream/60 p-4 border border-border/60 space-y-1 sm:col-span-2 md:col-span-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                    <Link2 className="size-3 text-muted-foreground" />
-                    External Source
-                  </span>
-                  <p className="text-xs font-mono text-clay break-all truncate">
-                    {project.source_url}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Notes / Context */}
-            {project.notes && (
-              <div className="rounded-2xl bg-cream/40 p-4 border border-border/60 space-y-1.5">
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                  <FileText className="size-3.5" />
-                  Creator notes & context
-                </span>
-                <p className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                  {project.notes}
-                </p>
-              </div>
-            )}
-          </div>}
-
-          {!['transcribed','completed','complete'].includes(statusVal) && (
-            <div className="grid gap-5 lg:grid-cols-2">
-              <section className="card-soft p-6">
-                <h2 className="font-display text-xl font-semibold">Live Activity</h2>
-                <div className="mt-5 space-y-5">
-                  {[
-                    { label: 'Video uploaded', ready: !['uploading'].includes(statusVal) },
-                    { label: 'Video processing', ready: ['processing','transcribing','analyzing','generating'].includes(statusVal) },
-                    { label: 'Audio transcription', ready: ['transcribing','analyzing','generating'].includes(statusVal) },
-                    { label: 'Content generation', ready: ['generating'].includes(statusVal) },
-                  ].map((event) => <div key={event.label} className="flex items-center gap-3"><span className={`grid size-7 place-items-center rounded-full ${event.ready?'bg-[#e3f1e6] text-vireo-green':'bg-[#f2f3f3] text-muted-foreground'}`}>{event.ready?<Check className="size-4"/>:<Clock className="size-4"/>}</span><span className="text-sm font-medium">{event.label}</span><span className="ml-auto text-xs text-muted-foreground">{event.ready?'Started':'Pending'}</span></div>)}
-                </div>
               </section>
-              <section className="card-soft p-6">
-                <h2 className="font-display text-xl font-semibold">Transcript & Content</h2>
-                <div className="mt-5 space-y-3 rounded-xl border border-border bg-[#fafbf9] p-5"><div className="h-3 w-4/5 animate-pulse rounded bg-[#e9eeea]"/><div className="h-3 w-full animate-pulse rounded bg-[#e9eeea]"/><div className="h-3 w-2/3 animate-pulse rounded bg-[#e9eeea]"/></div>
-                <p className="mt-4 text-sm text-muted-foreground">Transcript and generated drafts will appear when each step is ready.</p>
-              </section>
+
+              {/* Right Column: Locked Placeholders */}
+              <div className="space-y-6 lg:col-span-7">
+                {/* Locked Transcript Card */}
+                <section className="card-soft p-6 bg-card border-border/80 shadow-soft space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-border/70">
+                    <div className="flex items-center gap-2">
+                      <FileText className="size-4 text-muted-foreground" />
+                      <h3 className="font-display text-base font-semibold text-foreground">Transcript</h3>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                      <Lock className="size-3" />
+                      Locked
+                    </span>
+                  </div>
+
+                  <div className="relative rounded-xl border border-border/70 bg-[#fafbf9] p-6 text-center overflow-hidden">
+                    {/* Background blurred skeleton */}
+                    <div className="space-y-2.5 opacity-25 select-none pointer-events-none mb-4">
+                      <div className="h-3 w-4/5 rounded bg-muted-foreground/30 mx-auto" />
+                      <div className="h-3 w-full rounded bg-muted-foreground/30" />
+                      <div className="h-3 w-2/3 rounded bg-muted-foreground/30 mx-auto" />
+                    </div>
+
+                    <div className="relative z-10 flex flex-col items-center">
+                      <div className="grid size-10 place-items-center rounded-full bg-white shadow-soft border border-border text-muted-foreground mb-2">
+                        <Lock className="size-4 text-clay" />
+                      </div>
+                      <p className="text-sm font-semibold text-foreground font-display">Transcript will be available soon</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 max-w-sm">
+                        We're transcribing your video with high accuracy. This will be ready in a few minutes.
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Locked Generated Content Card */}
+                <section className="card-soft p-6 bg-card border-border/80 shadow-soft space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-border/70">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="size-4 text-clay" />
+                      <h3 className="font-display text-base font-semibold text-foreground">Generated Content</h3>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
+                      <Lock className="size-3" />
+                      Locked
+                    </span>
+                  </div>
+
+                  {/* 4 Feature Subcards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-border/80 bg-white p-3.5 space-y-1">
+                      <div className="flex items-center gap-2 text-foreground font-medium text-xs">
+                        <Play className="size-3.5 text-muted-foreground" />
+                        <span>Social Clips</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        Short-form videos for all platforms
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-border/80 bg-white p-3.5 space-y-1">
+                      <div className="flex items-center gap-2 text-foreground font-medium text-xs">
+                        <FileText className="size-3.5 text-muted-foreground" />
+                        <span>Titles & Descriptions</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        SEO-optimized titles and descriptions
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-border/80 bg-white p-3.5 space-y-1">
+                      <div className="flex items-center gap-2 text-foreground font-medium text-xs">
+                        <Hash className="size-3.5 text-muted-foreground" />
+                        <span>Hook Suggestions</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        High-performing opening hooks
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border border-border/80 bg-white p-3.5 space-y-1">
+                      <div className="flex items-center gap-2 text-foreground font-medium text-xs">
+                        <ImageIcon className="size-3.5 text-muted-foreground" />
+                        <span>Thumbnails</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground leading-snug">
+                        AI-generated thumbnail options
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Lock footer note */}
+                  <div className="flex items-center justify-center gap-2 pt-2 text-center">
+                    <Lock className="size-3 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      Generated content will be available soon as your video finishes processing.
+                    </span>
+                  </div>
+                </section>
+              </div>
             </div>
           )}
 
@@ -1040,6 +1183,7 @@ function Workspace({
   const [draft, setDraft] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [publishingItem, setPublishingItem] = useState<ContentOutput | null>(null);
 
   const tabOutputs = outputs.filter((o) => o.platform === activeTab);
   const tabConfig = TABS.find((t) => t.key === activeTab)!;
@@ -1219,6 +1363,16 @@ function Workspace({
                                   </>
                                 )}
                               </Button>
+                              <Button
+                                size="sm"
+                                variant="clay"
+                                onClick={() => setPublishingItem(item)}
+                                className="h-7 px-2 text-xs"
+                                title="Publish or schedule this content"
+                              >
+                                <Send className="size-3 mr-1" />
+                                <span>Publish</span>
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -1231,6 +1385,22 @@ function Workspace({
           );
         })}
       </div>
+
+      {publishingItem && (
+        <PublishModal
+          isOpen={true}
+          onClose={() => setPublishingItem(null)}
+          projectId={projectId}
+          contentOutputId={publishingItem.id}
+          initialPlatform={
+            ['youtube', 'instagram', 'tiktok', 'linkedin', 'x'].includes(publishingItem.platform)
+              ? (publishingItem.platform as any)
+              : undefined
+          }
+          initialTitle={publishingItem.content_type === 'title' ? publishingItem.content : ''}
+          initialCaption={publishingItem.content}
+        />
+      )}
     </div>
   );
 }

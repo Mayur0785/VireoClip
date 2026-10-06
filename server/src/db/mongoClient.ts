@@ -1,6 +1,14 @@
 import { Db, MongoClient } from 'mongodb';
+import dns from 'node:dns';
 import { config } from '../config/index.js';
 import { AppError } from '../types/index.js';
+
+// Ensure reliable SRV resolution on hosts where the local resolver drops SRV queries
+try {
+  dns.setServers(['8.8.8.8', '1.1.1.1']);
+} catch {
+  // Ignore if permissions or sandbox disallow custom dns servers
+}
 
 let client: MongoClient | null = null;
 let connecting: Promise<Db> | null = null;

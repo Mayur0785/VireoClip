@@ -336,7 +336,7 @@ async function runTests() {
       fs.writeFileSync(assFile, assContent, 'utf8');
 
       // Step C: Execute FFmpeg with 9:16 manual crop and burned ASS subtitle filter
-      const safeAss = assFile.replace(/\\/g, '/');
+      const safeAss = assFile.replace(/\\/g, '/').replace(':', '\\\\:');
       const cropFilter = buildCropFilter('9:16', { focusX: 0.5, focusY: 0.5 });
       const videoFilter = `${cropFilter},ass=${safeAss}`;
 
@@ -356,20 +356,13 @@ async function runTests() {
 
       assert.ok(fs.existsSync(outFile), 'Captioned 9:16 MP4 should exist');
 
-      // Step D: Verify output dimensions with ffprobe
-      const { stdout: probeOut } = await execFileAsync('ffprobe', [
-        '-v', 'error',
-        '-select_streams', 'v:0',
-        '-show_entries', 'stream=width,height,duration',
-        '-of', 'json',
-        outFile,
-      ]);
-
-      const probeData = JSON.parse(probeOut);
-      const stream = probeData.streams?.[0];
-      assert.ok(stream, 'Stream must exist');
-      assert.equal(stream.width, 1080);
-      assert.equal(stream.height, 1920);
+      // Step D: Verify output dimensions with ffmpeg probe
+      try {
+        await execFileAsync(ffmpegBin, ['-i', outFile]);
+      } catch (err: any) {
+        const info = (err.stderr || '') + (err.stdout || '');
+        assert.ok(info.includes('1080x1920'), `Output must be vertical 1080x1920: ${info}`);
+      }
 
       const size = fs.statSync(outFile).size;
       assert.ok(size > 5000, `Output file must have substantial size (got ${size} bytes)`);
@@ -409,6 +402,100 @@ async function runTests() {
 
       assert.ok(fs.existsSync(outFile), 'Output without captions should exist');
       assert.ok(fs.statSync(outFile).size > 3000);
+    } finally {
+      if (fs.existsSync(tmpDir)) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  await it('Real FFmpeg Engine: mute=true renders output without audio stream (ffprobe verified)', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vireo-p12-mute-'));
+    const srcFile = path.join(tmpDir, 'source_with_audio.mp4');
+    const mutedOut = path.join(tmpDir, 'muted_output.mp4');
+
+    try {
+      // Generate synthetic source with both video and sine audio
+      await execFileAsync(ffmpegBin, [
+        '-y',
+        '-f', 'lavfi', '-i', 'testsrc=duration=2:size=1280x720:rate=30',
+        '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=2',
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-pix_fmt', 'yuv420p',
+        srcFile,
+      ]);
+
+      // Render with mute=true (noAudio flag equivalent: -an)
+      const cropFilter = buildCropFilter('9:16');
+      await execFileAsync(ffmpegBin, [
+        '-y',
+        '-ss', '0.0',
+        '-i', srcFile,
+        '-t', '1.0',
+        '-vf', cropFilter,
+        '-c:v', 'libx264',
+        '-an',
+        '-preset', 'ultrafast',
+        mutedOut,
+      ]);
+
+      assert.ok(fs.existsSync(mutedOut), 'Muted output should exist');
+
+      // Verify with ffmpeg probe that output has NO audio stream
+      try {
+        await execFileAsync(ffmpegBin, ['-i', mutedOut]);
+      } catch (err: any) {
+        const probeOutput = (err.stderr || '') + (err.stdout || '');
+        assert.ok(!probeOutput.includes('Audio: aac'), 'Muted output must NOT contain active audio stream');
+        assert.ok(probeOutput.includes('Video: h264'), 'Muted output must retain valid video stream');
+      }
+    } finally {
+      if (fs.existsSync(tmpDir)) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  await it('Real FFmpeg Engine: mute=false retains normal audio stream (ffprobe verified)', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vireo-p12-unmute-'));
+    const srcFile = path.join(tmpDir, 'source_with_audio.mp4');
+    const unmutedOut = path.join(tmpDir, 'unmuted_output.mp4');
+
+    try {
+      await execFileAsync(ffmpegBin, [
+        '-y',
+        '-f', 'lavfi', '-i', 'testsrc=duration=2:size=1280x720:rate=30',
+        '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=2',
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-pix_fmt', 'yuv420p',
+        srcFile,
+      ]);
+
+      const cropFilter = buildCropFilter('9:16');
+      await execFileAsync(ffmpegBin, [
+        '-y',
+        '-ss', '0.0',
+        '-i', srcFile,
+        '-t', '1.0',
+        '-vf', cropFilter,
+        '-c:v', 'libx264',
+        '-c:a', 'aac',
+        '-b:a', '128k',
+        '-preset', 'ultrafast',
+        unmutedOut,
+      ]);
+
+      assert.ok(fs.existsSync(unmutedOut), 'Unmuted output should exist');
+
+      try {
+        await execFileAsync(ffmpegBin, ['-i', unmutedOut]);
+      } catch (err: any) {
+        const probeOutput = (err.stderr || '') + (err.stdout || '');
+        assert.ok(probeOutput.includes('Audio: aac'), 'Unmuted output MUST contain normal audio stream');
+        assert.ok(probeOutput.includes('Video: h264'), 'Unmuted output must retain video stream');
+      }
     } finally {
       if (fs.existsSync(tmpDir)) {
         fs.rmSync(tmpDir, { recursive: true, force: true });

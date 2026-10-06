@@ -29,49 +29,110 @@ async function runTransaction<T>(fn: (session: ClientSession) => Promise<T>): Pr
 }
 
 /** Reserve atomically by conditionally updating the balance inside the same transaction as the event. */
-export async function reserveUsage(userId: string, projectId: string, attemptId: string, period: string, minutes: number) {
+export async function reserveUsage(
+  userId: string,
+  projectId: string,
+  attemptId: string,
+  period: string,
+  minutes: number,
+  isUnlimited = false,
+  entitlementLimitMinutes?: number,
+  entitlementPlanTier?: string
+) {
   const db = await getMongoDb();
   const events = db.collection<Event>('usage_events');
   const balances = db.collection<Balance>('subscription_limits');
   const requested = round(minutes);
   if (!Number.isFinite(requested) || requested <= 0) throw new Error('Invalid reservation estimate.');
 
+  const effectiveLimit = isUnlimited
+    ? 999999
+    : (entitlementLimitMinutes ?? config.defaultMonthlyQuotaMinutes);
+  const effectiveTier = isUnlimited
+    ? 'developer'
+    : (entitlementPlanTier ?? 'free');
+
   for (let retry = 0; retry < 5; retry++) {
     const existing = await events.findOne({ processing_attempt_id: attemptId });
     if (existing) {
       if (existing.user_id !== userId || existing.project_id !== projectId) throw new Error('Attempt ID is already in use.');
       const balance = await balances.findOne({ user_id: userId, billing_period: period });
-      const quota = balance?.monthly_minutes_limit ?? config.defaultMonthlyQuotaMinutes;
-      return { allowed: existing.status !== 'released', idempotent: true, usage_event_id: existing.id,
-        billing_period: period, limit_minutes: quota, allocated_minutes: existing.reserved_minutes,
-        remaining_minutes: Math.max(0, round(quota - (balance?.settled_minutes ?? 0) - (balance?.reserved_minutes ?? 0))) };
+      const quota = balance?.monthly_minutes_limit ?? effectiveLimit;
+      return {
+        allowed: existing.status !== 'released',
+        idempotent: true,
+        usage_event_id: existing.id,
+        billing_period: period,
+        limit_minutes: quota,
+        allocated_minutes: existing.reserved_minutes,
+        remaining_minutes: isUnlimited
+          ? 999999
+          : Math.max(0, round(quota - (balance?.settled_minutes ?? 0) - (balance?.reserved_minutes ?? 0))),
+      };
     }
     try {
       return await runTransaction(async (session) => {
         const now = new Date();
         await balances.updateOne({ user_id: userId, billing_period: period }, {
-          $setOnInsert: { user_id: userId, billing_period: period, plan_tier: 'free',
-            monthly_minutes_limit: config.defaultMonthlyQuotaMinutes, settled_minutes: 0, reserved_minutes: 0 },
+          $setOnInsert: {
+            user_id: userId,
+            billing_period: period,
+            plan_tier: effectiveTier,
+            monthly_minutes_limit: effectiveLimit,
+            settled_minutes: 0,
+            reserved_minutes: 0,
+          },
         }, { upsert: true, session });
         const balance = await balances.findOne({ user_id: userId, billing_period: period }, { session });
         if (!balance) throw new Error('Quota balance unavailable.');
-        const updated = await balances.updateOne({
-          user_id: userId, billing_period: period,
-          $expr: { $lte: [{ $add: ['$settled_minutes', '$reserved_minutes', requested] }, '$monthly_minutes_limit'] },
-        }, { $inc: { reserved_minutes: requested } }, { session });
-        if (updated.modifiedCount !== 1) {
-          return { allowed: false, idempotent: false, billing_period: period,
-            limit_minutes: balance.monthly_minutes_limit, allocated_minutes: 0,
-            requested_minutes: requested, error_code: 'QUOTA_EXCEEDED',
-            remaining_minutes: Math.max(0, round(balance.monthly_minutes_limit - balance.settled_minutes - balance.reserved_minutes)) };
+
+        // For unlimited dev accounts, do not enforce the ceiling condition, but still atomically increment reserved_minutes
+        const updateFilter: Record<string, unknown> = {
+          user_id: userId,
+          billing_period: period,
+        };
+        if (!isUnlimited) {
+          updateFilter.$expr = {
+            $lte: [{ $add: ['$settled_minutes', '$reserved_minutes', requested] }, '$monthly_minutes_limit'],
+          };
         }
-        const event: Event = { id: crypto.randomUUID(), user_id: userId, project_id: projectId,
-          processing_attempt_id: attemptId, billing_period: period, status: 'reserved',
-          reserved_minutes: requested, created_at: now, updated_at: now };
+
+        const updated = await balances.updateOne(updateFilter, { $inc: { reserved_minutes: requested } }, { session });
+        if (updated.modifiedCount !== 1) {
+          return {
+            allowed: false,
+            idempotent: false,
+            billing_period: period,
+            limit_minutes: balance.monthly_minutes_limit,
+            allocated_minutes: 0,
+            requested_minutes: requested,
+            error_code: 'QUOTA_EXCEEDED',
+            remaining_minutes: Math.max(0, round(balance.monthly_minutes_limit - balance.settled_minutes - balance.reserved_minutes)),
+          };
+        }
+        const event: Event = {
+          id: crypto.randomUUID(),
+          user_id: userId,
+          project_id: projectId,
+          processing_attempt_id: attemptId,
+          billing_period: period,
+          status: 'reserved',
+          reserved_minutes: requested,
+          created_at: now,
+          updated_at: now,
+        };
         await events.insertOne(event, { session });
-        return { allowed: true, idempotent: false, usage_event_id: event.id, billing_period: period,
-          limit_minutes: balance.monthly_minutes_limit, allocated_minutes: requested,
-          remaining_minutes: Math.max(0, round(balance.monthly_minutes_limit - balance.settled_minutes - balance.reserved_minutes - requested)) };
+        return {
+          allowed: true,
+          idempotent: false,
+          usage_event_id: event.id,
+          billing_period: period,
+          limit_minutes: isUnlimited ? 999999 : balance.monthly_minutes_limit,
+          allocated_minutes: requested,
+          remaining_minutes: isUnlimited
+            ? 999999
+            : Math.max(0, round(balance.monthly_minutes_limit - balance.settled_minutes - balance.reserved_minutes - requested)),
+        };
       });
     } catch (error) {
       const retryable = error instanceof MongoServerError &&

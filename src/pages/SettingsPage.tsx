@@ -8,6 +8,11 @@ import {
   Check,
   KeyRound,
   LogOut,
+  Share2,
+  AlertCircle,
+  RefreshCw,
+  Unlink,
+  ExternalLink,
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
@@ -16,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { backendRequest } from '../services/backendClient';
 import { projectService } from '../services/projectService';
+import { socialService, SafeSocialAccountConnection, SocialPlatform } from '../services/socialService';
 import { SpotlightCard } from '../components/react-bits/SpotlightCard';
 import { ShinyButton } from '../components/react-bits/ShinyButton';
 import { AmbientBackdrop } from '../components/react-bits/AmbientBackdrop';
@@ -62,13 +68,16 @@ export const SettingsPage: React.FC = () => {
 
   // Section A: Creator Identity
   const [fullName, setFullName] = useState(authProfile?.full_name || '');
+  const [brandName, setBrandName] = useState(authCreator?.brand_name || '');
   const [niche, setNiche] = useState(authCreator?.niche || '');
   const [audience, setAudience] = useState(authCreator?.target_audience || '');
+  const [brandDescription, setBrandDescription] = useState(authCreator?.brand_description || '');
 
   // Section B: Content Style
   const [language, setLanguage] = useState(authCreator?.language || 'English');
   const [tone, setTone] = useState(authCreator?.tone || 'Friendly');
   const [customTone, setCustomTone] = useState(authCreator?.custom_tone || '');
+  const [contentGoals, setContentGoals] = useState(authCreator?.content_goals || '');
   const [preferredHookStyle, setPreferredHookStyle] = useState(authCreator?.preferred_hook_style || '');
 
   // Section C: Brand Rules
@@ -90,6 +99,97 @@ export const SettingsPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
 
+  // Section F: Connected Social Accounts (Phase 9)
+  const [socialAccounts, setSocialAccounts] = useState<SafeSocialAccountConnection[]>([]);
+  const [configuredProviders, setConfiguredProviders] = useState<Record<SocialPlatform, boolean>>({
+    youtube: false,
+    instagram: false,
+    tiktok: false,
+    linkedin: false,
+    x: false,
+  });
+  const [loadingSocial, setLoadingSocial] = useState(false);
+  const [connectingPlatform, setConnectingPlatform] = useState<SocialPlatform | null>(null);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [socialFeedback, setSocialFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const loadSocialAccounts = async () => {
+    try {
+      setLoadingSocial(true);
+      const data = await socialService.getAccounts();
+      setSocialAccounts(data.accounts || []);
+      setConfiguredProviders(data.configuredProviders || {});
+    } catch (err: any) {
+      console.warn('Could not load social accounts:', err?.message);
+    } finally {
+      setLoadingSocial(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSocialAccounts();
+
+    // Check for query parameters indicating redirect back from OAuth
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('social_connected');
+    const socialErr = params.get('social_error');
+
+    if (connected) {
+      setSocialFeedback({
+        type: 'success',
+        message: `Successfully connected your ${connected.toUpperCase()} account!`,
+      });
+      // Clean query params
+      window.history.replaceState({}, '', window.location.pathname);
+      loadSocialAccounts();
+    } else if (socialErr) {
+      setSocialFeedback({
+        type: 'error',
+        message: decodeURIComponent(socialErr),
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const handleConnectSocial = async (platform: SocialPlatform) => {
+    try {
+      setConnectingPlatform(platform);
+      setSocialFeedback(null);
+      const url = await socialService.getAuthorizationUrl(platform);
+      // Redirect browser to provider's official OAuth page
+      window.location.href = url;
+    } catch (err: any) {
+      setSocialFeedback({
+        type: 'error',
+        message: err?.message || `Failed to initiate ${platform} connection.`,
+      });
+      setConnectingPlatform(null);
+    }
+  };
+
+  const handleDisconnectSocial = async (connectionId: string, platformName: string) => {
+    if (!window.confirm(`Are you sure you want to disconnect your ${platformName} account?`)) {
+      return;
+    }
+    try {
+      setDisconnectingId(connectionId);
+      setSocialFeedback(null);
+      await socialService.disconnectAccount(connectionId);
+      setSocialFeedback({
+        type: 'success',
+        message: `Disconnected ${platformName} account successfully.`,
+      });
+      await loadSocialAccounts();
+    } catch (err: any) {
+      setSocialFeedback({
+        type: 'error',
+        message: err?.message || `Failed to disconnect ${platformName} account.`,
+      });
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
+
   useEffect(() => {
     if (authProfile) {
       setFullName(authProfile.full_name);
@@ -98,11 +198,14 @@ export const SettingsPage: React.FC = () => {
     }
 
     if (authCreator) {
+      if (authCreator.brand_name !== undefined) setBrandName(authCreator.brand_name);
       if (authCreator.niche !== undefined) setNiche(authCreator.niche);
       if (authCreator.target_audience !== undefined) setAudience(authCreator.target_audience);
+      if (authCreator.brand_description !== undefined) setBrandDescription(authCreator.brand_description);
       if (authCreator.language !== undefined) setLanguage(authCreator.language);
       if (authCreator.tone !== undefined) setTone(authCreator.tone);
       if (authCreator.custom_tone !== undefined) setCustomTone(authCreator.custom_tone);
+      if (authCreator.content_goals !== undefined) setContentGoals(authCreator.content_goals);
       if (authCreator.preferred_hook_style !== undefined) setPreferredHookStyle(authCreator.preferred_hook_style);
       if (authCreator.brand_rules !== undefined) setBrandRules(authCreator.brand_rules);
       if (authCreator.forbidden_phrases !== undefined) setForbiddenPhrases(authCreator.forbidden_phrases);
@@ -126,11 +229,14 @@ export const SettingsPage: React.FC = () => {
     // Sync local projectService profile
     projectService.updateProfile({
       name: fullName,
+      brand_name: brandName,
       niche,
       audience,
+      brand_description: brandDescription,
       language,
       tone,
       custom_tone: customTone,
+      content_goals: contentGoals,
       website_url: websiteUrl,
       newsletter_url: newsletterUrl,
       podcast_url: podcastUrl,
@@ -148,12 +254,17 @@ export const SettingsPage: React.FC = () => {
       try {
         await backendRequest('/profiles/me', {
           method: 'PUT',
-          body: JSON.stringify({ full_name: fullName.trim(), creatorProfile: {
+          body: JSON.stringify({
+            full_name: fullName.trim(),
+            creatorProfile: {
+              brand_name: brandName.trim(),
               niche: niche.trim(),
               target_audience: audience.trim(),
+              brand_description: brandDescription.trim(),
               language,
               tone,
               custom_tone: customTone.trim(),
+              content_goals: contentGoals.trim(),
               website_url: websiteUrl.trim(),
               newsletter_url: newsletterUrl.trim(),
               podcast_url: podcastUrl.trim(),
@@ -165,21 +276,25 @@ export const SettingsPage: React.FC = () => {
               preferred_hook_style: preferredHookStyle.trim(),
               brand_rules: brandRules.trim(),
               forbidden_phrases: forbiddenPhrases.trim(),
-            } }),
+            },
+          }),
         });
 
         await refreshProfile();
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
       } catch (err: any) {
         console.error('Failed to save settings:', err);
         setErrorMessage(
-          err.message || 'Failed to sync settings with database. Local changes were preserved.'
+          err.message || 'Couldn\'t save your creator profile.'
         );
       }
+    } else {
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3000);
     }
 
     setSaving(false);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
   };
 
   const handleResetPassword = async () => {
@@ -249,7 +364,14 @@ export const SettingsPage: React.FC = () => {
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Input
+              label="Creator / Brand Name"
+              placeholder="e.g. Alex Rivera, TechCraft, Nexus Media"
+              value={brandName}
+              onChange={(e) => setBrandName(e.target.value)}
+              className="rounded-2xl"
+            />
             <Input
               label="Creator Niche"
               placeholder="e.g. Fitness, Tech breakdowns, SaaS & Startups"
@@ -265,6 +387,15 @@ export const SettingsPage: React.FC = () => {
               className="rounded-2xl"
             />
           </div>
+
+          <Textarea
+            label="Brand Story & Mission"
+            placeholder="e.g. We simplify complex software architecture for ambitious engineers building modern web applications."
+            value={brandDescription}
+            onChange={(e) => setBrandDescription(e.target.value)}
+            rows={2}
+            className="rounded-2xl text-xs"
+          />
         </SpotlightCard>
 
         {/* Section B: Content Style & Brand Voice */}
@@ -282,7 +413,7 @@ export const SettingsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground font-mono">
                 Language
@@ -316,6 +447,14 @@ export const SettingsPage: React.FC = () => {
                 ))}
               </select>
             </div>
+
+            <Input
+              label="Primary Content Goal"
+              placeholder="e.g. Educate audience, drive engagement, generate leads"
+              value={contentGoals}
+              onChange={(e) => setContentGoals(e.target.value)}
+              className="rounded-2xl text-xs"
+            />
           </div>
 
           {/* Conditional Custom Tone */}
@@ -536,6 +675,199 @@ export const SettingsPage: React.FC = () => {
           >
             <LogOut className="mr-1.5 size-3.5" /> Sign Out
           </Button>
+        </div>
+      </SpotlightCard>
+
+      {/* Section F: Connected Social Accounts (Phase 9) */}
+      <SpotlightCard
+        spotlightColor="rgba(38, 36, 34, 0.05)"
+        className="p-6 md:p-7 space-y-5"
+      >
+        <div className="flex items-center justify-between border-b border-border/50 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex size-7 items-center justify-center rounded-lg bg-sage/20 text-sage">
+              <Share2 className="size-3.5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold font-display text-foreground">Connected Social Accounts</h2>
+              <p className="text-[11px] text-muted-foreground">
+                Connect your social channels for seamless future publishing & scheduling.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={loadSocialAccounts}
+            disabled={loadingSocial}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors disabled:opacity-50"
+            title="Refresh accounts"
+          >
+            <RefreshCw className={`size-3.5 ${loadingSocial ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+        </div>
+
+        {socialFeedback && (
+          <div
+            role="alert"
+            className={`rounded-2xl p-3.5 text-xs font-medium text-center flex items-center justify-center gap-2 ${
+              socialFeedback.type === 'success'
+                ? 'bg-sage/15 border border-sage/30 text-sage'
+                : 'bg-destructive/10 border border-destructive/20 text-destructive'
+            }`}
+          >
+            {socialFeedback.type === 'success' ? (
+              <Check className="size-4 shrink-0" />
+            ) : (
+              <AlertCircle className="size-4 shrink-0" />
+            )}
+            <span>{socialFeedback.message}</span>
+          </div>
+        )}
+
+        {/* Platform Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {[
+            {
+              id: 'youtube' as SocialPlatform,
+              name: 'YouTube',
+              subtitle: 'Google / YouTube Channel',
+              color: 'text-red-500',
+              bgColor: 'bg-red-500/10 border-red-500/20',
+            },
+            {
+              id: 'instagram' as SocialPlatform,
+              name: 'Instagram',
+              subtitle: 'Meta Professional / Creator',
+              color: 'text-pink-500',
+              bgColor: 'bg-pink-500/10 border-pink-500/20',
+            },
+            {
+              id: 'tiktok' as SocialPlatform,
+              name: 'TikTok',
+              subtitle: 'TikTok Creator Account',
+              color: 'text-cyan-500',
+              bgColor: 'bg-cyan-500/10 border-cyan-500/20',
+            },
+            {
+              id: 'linkedin' as SocialPlatform,
+              name: 'LinkedIn',
+              subtitle: 'LinkedIn Profile / Page',
+              color: 'text-blue-500',
+              bgColor: 'bg-blue-500/10 border-blue-500/20',
+            },
+            {
+              id: 'x' as SocialPlatform,
+              name: 'X (Twitter)',
+              subtitle: 'X Creator / Developer Account',
+              color: 'text-stone-300',
+              bgColor: 'bg-stone-500/10 border-stone-500/20',
+            },
+          ].map((platform) => {
+            const connection = socialAccounts.find((a) => a.provider === platform.id);
+            const isConfigured = Boolean(configuredProviders[platform.id]);
+            const isConnecting = connectingPlatform === platform.id;
+            const isDisconnecting = connection ? disconnectingId === connection.id : false;
+
+            return (
+              <div
+                key={platform.id}
+                className={`rounded-2xl border p-4 flex flex-col justify-between space-y-3 transition-all ${
+                  connection
+                    ? 'border-sage/40 bg-sage/5'
+                    : 'border-border/60 bg-card/40 hover:border-border'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {connection?.avatar_url ? (
+                      <img
+                        src={connection.avatar_url}
+                        alt={connection.account_name}
+                        className="size-9 rounded-full object-cover border border-border"
+                      />
+                    ) : (
+                      <div
+                        className={`size-9 rounded-xl flex items-center justify-center font-bold text-xs border ${platform.bgColor} ${platform.color}`}
+                      >
+                        {platform.name[0]}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-xs font-semibold text-foreground truncate">
+                          {platform.name}
+                        </h4>
+                        {connection && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-sage/20 px-1.5 py-0.2 text-[9px] font-medium text-sage">
+                            <span className="size-1 rounded-full bg-sage animate-pulse" />
+                            Connected
+                          </span>
+                        )}
+                        {!connection && !isConfigured && (
+                          <span className="rounded-full bg-muted px-1.5 py-0.2 text-[9px] font-medium text-muted-foreground">
+                            Setup Required
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {connection
+                          ? connection.username || connection.account_name
+                          : platform.subtitle}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between border-t border-border/30 text-[11px]">
+                  {connection ? (
+                    <>
+                      <span className="text-muted-foreground text-[10px]">
+                        Connected:{' '}
+                        {new Date(connection.connected_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isDisconnecting}
+                        onClick={() => handleDisconnectSocial(connection.id, platform.name)}
+                        className="h-7 px-2.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        {isDisconnecting ? (
+                          <span className="size-3 rounded-full border-2 border-destructive/60 border-t-destructive animate-spin mr-1" />
+                        ) : (
+                          <Unlink className="size-3 mr-1" />
+                        )}
+                        Disconnect
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground text-[10px]">
+                        {isConfigured ? 'Ready to connect' : 'Keys not configured in server env'}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!isConfigured || isConnecting}
+                        onClick={() => handleConnectSocial(platform.id)}
+                        className="h-7 px-2.5 text-xs font-medium"
+                      >
+                        {isConnecting ? (
+                          <span className="size-3 rounded-full border-2 border-foreground/60 border-t-foreground animate-spin mr-1" />
+                        ) : (
+                          <ExternalLink className="size-3 mr-1" />
+                        )}
+                        Connect
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
       </SpotlightCard>
     </div>

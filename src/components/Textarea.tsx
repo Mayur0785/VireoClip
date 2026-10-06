@@ -3,19 +3,29 @@ import { cn } from '../lib/utils';
 
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
   label?: string;
+  rightLabel?: React.ReactNode;
   error?: string;
 }
 
 export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, label, error, id, ...props }, ref) => {
+  ({ className, label, rightLabel, error, id, ...props }, ref) => {
     const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
 
     return (
       <div className="w-full space-y-1.5">
-        {label && (
-          <label htmlFor={inputId} className="block text-sm font-semibold text-foreground">
-            {label}
-          </label>
+        {(label || rightLabel) && (
+          <div className="flex items-center justify-between">
+            {label && (
+              <label htmlFor={inputId} className="block text-sm font-semibold text-foreground">
+                {label}
+              </label>
+            )}
+            {rightLabel && (
+              <span className="text-xs text-muted-foreground font-mono">
+                {rightLabel}
+              </span>
+            )}
+          </div>
         )}
         <textarea
           id={inputId}

@@ -13,6 +13,7 @@ import {
   History,
   Sparkles,
   Zap,
+  TrendingUp,
 } from 'lucide-react';
 import { StatusBadge } from '../components/StatusBadge';
 import { projectService } from '../services/projectService';
@@ -43,8 +44,8 @@ export const DashboardPage: React.FC = () => {
     try {
       setError('');
       setProjects(await projectService.fetchProjects(user.id));
-    } catch {
-      setError('Unable to load projects.');
+    } catch (err: any) {
+      setError(err?.message || 'Unable to load projects.');
     } finally {
       setLoading(false);
     }
@@ -116,24 +117,38 @@ export const DashboardPage: React.FC = () => {
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-vireo-green font-mono">
               <Zap className="size-3.5" />
               <span>
-                Monthly Processing {usage?.plan_tier ? `(${usage.plan_tier.toUpperCase()} TIER)` : ''}
+                Monthly Processing {usage?.is_unlimited ? '(UNLIMITED TEST PLAN)' : usage?.plan_tier ? `(${usage.plan_tier.toUpperCase()} TIER)` : ''}
               </span>
             </div>
 
             {usageLoading ? (
               <div className="h-8 w-48 animate-pulse rounded bg-cream/70 mt-1" />
             ) : usage ? (
-              <div className="flex items-baseline gap-2 flex-wrap">
-                <span className="font-display text-2xl font-bold text-foreground sm:text-3xl">
-                  {usage.total_used_minutes.toFixed(1)} / {usage.limit_minutes} min used
-                </span>
-                <span className="text-sm font-medium text-muted-foreground">
-                  ({usage.remaining_minutes.toFixed(1)} min remaining)
-                </span>
-                <span className="ml-2 rounded-full bg-cream px-2.5 py-0.5 text-xs font-semibold text-clay font-mono">
-                  {Math.min(100, Math.round((usage.total_used_minutes / (usage.limit_minutes || 1)) * 100))}%
-                </span>
-              </div>
+              usage.is_unlimited ? (
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="font-display text-2xl font-bold text-foreground sm:text-3xl">
+                    Unlimited
+                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    ({usage.total_used_minutes.toFixed(1)} min recorded this cycle)
+                  </span>
+                  <span className="ml-2 rounded-full bg-[#e8f3e9] px-2.5 py-0.5 text-xs font-semibold text-vireo-green font-mono">
+                    ACTIVE
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="font-display text-2xl font-bold text-foreground sm:text-3xl">
+                    {usage.total_used_minutes.toFixed(1)} / {usage.limit_minutes} min used
+                  </span>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    ({usage.remaining_minutes.toFixed(1)} min remaining)
+                  </span>
+                  <span className="ml-2 rounded-full bg-cream px-2.5 py-0.5 text-xs font-semibold text-clay font-mono">
+                    {Math.min(100, Math.round((usage.total_used_minutes / (usage.limit_minutes || 1)) * 100))}%
+                  </span>
+                </div>
+              )
             ) : (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span className="font-semibold text-muted-foreground">Usage unavailable</span>
@@ -145,7 +160,7 @@ export const DashboardPage: React.FC = () => {
           <div className="flex items-center gap-3 self-start sm:self-auto">
             {usage?.reset_date && (
               <span className="text-xs text-muted-foreground font-mono">
-                Resets {new Date(usage.reset_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                Cycle resets {new Date(usage.reset_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
               </span>
             )}
           </div>
@@ -156,17 +171,21 @@ export const DashboardPage: React.FC = () => {
             <div className="h-2 w-full overflow-hidden rounded-full bg-cream">
               <div
                 className={`h-full transition-all duration-500 rounded-full ${
-                  usage.is_quota_exceeded
+                  usage.is_unlimited
+                    ? 'bg-vireo-green'
+                    : usage.is_quota_exceeded
                     ? 'bg-destructive'
-                    : (usage.total_used_minutes / usage.limit_minutes) > 0.8
+                    : (usage.total_used_minutes / (usage.limit_minutes || 1)) > 0.8
                     ? 'bg-amber-500'
                     : 'bg-vireo-green'
                 }`}
                 style={{
-                  width: `${Math.min(
-                    100,
-                    Math.max(2, Math.round((usage.total_used_minutes / (usage.limit_minutes || 1)) * 100))
-                  )}%`,
+                  width: usage.is_unlimited
+                    ? '100%'
+                    : `${Math.min(
+                        100,
+                        Math.max(2, Math.round((usage.total_used_minutes / (usage.limit_minutes || 1)) * 100))
+                      )}%`,
                 }}
               />
             </div>
@@ -258,6 +277,16 @@ export const DashboardPage: React.FC = () => {
                 <p className="mt-1 text-xs text-muted-foreground">Available after processing</p>
               </div>
             )}
+            <Link
+              to="/analytics"
+              className="rounded-xl border border-[#e3ece5] bg-[#f8fcf8] p-5 hover:border-vireo-green"
+            >
+              <span className="grid size-10 place-items-center rounded-full bg-[#e6f2e9] text-vireo-green">
+                <TrendingUp className="size-5" />
+              </span>
+              <h3 className="mt-5 text-sm font-semibold">Growth Coach</h3>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">View performance & learned patterns</p>
+            </Link>
           </div>
         </section>
 

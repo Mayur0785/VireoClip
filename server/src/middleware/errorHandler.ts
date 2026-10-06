@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { AppError, AuthenticatedRequest } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
+import { errorMonitoring } from '../monitoring/errorMonitoring.js';
 
 /**
  * Global error handler.
@@ -15,7 +16,7 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction
 ): void => {
-  const requestId = (req as AuthenticatedRequest).requestId;
+  const requestId = (req as AuthenticatedRequest).requestId || (req.headers['x-request-id'] as string) || (req.headers['x-correlation-id'] as string);
 
   // Determine status code and error code
   let statusCode = 500;
@@ -26,9 +27,16 @@ export const errorHandler = (
     statusCode = err.statusCode;
     code = err.code;
     message = err.message;
-  } else if ('statusCode' in err && typeof (err as any).statusCode === 'number') {
-    statusCode = (err as any).statusCode;
-    message = statusCode === 500 ? 'Internal server error' : err.message;
+  } else {
+    if ('statusCode' in err && typeof (err as any).statusCode === 'number') {
+      statusCode = (err as any).statusCode;
+    } else if ('status' in err && typeof (err as any).status === 'number') {
+      statusCode = (err as any).status;
+    }
+    if ('code' in err && typeof (err as any).code === 'string') {
+      code = (err as any).code;
+    }
+    message = statusCode === 500 && !('code' in err) ? 'Internal server error' : err.message;
   }
 
   // Log error internally with full context (never leaked to client)
@@ -39,11 +47,27 @@ export const errorHandler = (
     stack: config.isProduction ? undefined : err.stack,
   });
 
+  // Track in error monitoring abstraction if server-side failure
+  if (statusCode >= 500) {
+    errorMonitoring.captureException(err, {
+      requestId,
+      statusCode,
+      code,
+      path: req.originalUrl,
+      method: req.method,
+    });
+  }
+
   res.status(statusCode).json({
     status: 'error',
     code,
     message,
-    ...(requestId ? { requestId } : {}),
+    ...(requestId ? { requestId, request_id: requestId } : {}),
+    error: {
+      code,
+      message,
+      ...(requestId ? { request_id: requestId, requestId } : {}),
+    },
   });
 };
 

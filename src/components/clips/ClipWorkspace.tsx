@@ -14,15 +14,17 @@ import {
   AlertCircle,
   Download,
   RefreshCw,
-  Trash2,
   Video,
   Sliders,
+  Share2,
+  Trash2,
 } from 'lucide-react';
 import { Button } from '../Button';
 import { SpotlightCard } from '../react-bits/SpotlightCard';
 import { ClipCandidate, ClipCandidateStatus, Transcript, RenderedClip } from '../../types';
 import { clipService } from '../../services/clipService';
 import { clipRenderService } from '../../services/clipRenderService';
+import { PublishModal } from '../PublishModal';
 
 export interface ClipWorkspaceProps {
   projectId: string;
@@ -56,6 +58,7 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [retryingClipId, setRetryingClipId] = useState<string | null>(null);
+  const [publishingClip, setPublishingClip] = useState<RenderedClip | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -826,10 +829,11 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="text-xs border-orange-500/50 hover:bg-orange-500/10 text-orange-400"
+                                className="text-xs font-semibold border-clay/60 bg-clay/10 text-clay hover:bg-clay hover:text-white shadow-xs transition-colors"
+                                title="Open full Clip Editor (framing, captions, headline, audio)"
                               >
-                                <Sliders className="size-3 mr-1" />
-                                Edit
+                                <Sliders className="size-3.5 mr-1.5" />
+                                Edit Video
                               </Button>
                             </Link>
                             <Button
@@ -839,6 +843,16 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                               onClick={() => handleTogglePreview(clip.id)}
                             >
                               {previewClipId === clip.id ? 'Close' : 'Preview'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs border-sage/60 bg-sage/10 text-sage hover:bg-sage hover:text-white"
+                              title="Publish or schedule this clip to social platforms"
+                              onClick={() => setPublishingClip(clip)}
+                            >
+                              <Share2 className="size-3 mr-1" />
+                              Publish
                             </Button>
                             <Button
                               variant="clay"
@@ -891,6 +905,18 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* Phase 10: Publishing Composer Modal */}
+      {publishingClip && (
+        <PublishModal
+          isOpen={Boolean(publishingClip)}
+          onClose={() => setPublishingClip(null)}
+          projectId={projectId}
+          clipId={publishingClip.id}
+          initialTitle={`Clip: ${Math.round(publishingClip.duration_seconds)}s Highlight`}
+          initialCaption="Check out this highlight clip generated with VireoClip! #ai #video #shorts"
+        />
       )}
     </div>
   );

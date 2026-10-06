@@ -94,10 +94,13 @@ export class ContentPromptService {
 
     // 1. Creator Persona
     const personaLines: string[] = [];
+    if (cp?.brand_name?.trim()) personaLines.push(`- Creator / Brand Name: ${cp.brand_name.trim()}`);
     if (cp?.niche?.trim()) personaLines.push(`- Niche: ${cp.niche.trim()}`);
     if (cp?.target_audience?.trim()) personaLines.push(`- Target Audience: ${cp.target_audience.trim()}`);
+    if (cp?.brand_description?.trim()) personaLines.push(`- Brand Story & Mission: ${cp.brand_description.trim()}`);
     personaLines.push(`- Tone of Voice: ${effectiveTone}`);
     personaLines.push(`- Language: ${effectiveLanguage}`);
+    if (cp?.content_goals?.trim()) personaLines.push(`- Core Content Goals: ${cp.content_goals.trim()}`);
     if (cp?.preferred_hook_style?.trim()) {
       personaLines.push(`- Preferred Hook Style: ${cp.preferred_hook_style.trim()}`);
     }
@@ -180,14 +183,29 @@ export class ContentPromptService {
    * System instruction shared across all platform generators to ensure factual accuracy and JSON adherence.
    */
   public static getSystemPrompt(): string {
-    return `You are an expert AI social media and video content repurposing engine.
-Your task is to analyze real video transcripts and produce high-impact, platform-optimized content.
+    return `You are Vireo's elite AI Content Repurposing & Editorial Intelligence Engine.
+Your task is to analyze real video transcripts and produce high-impact, platform-native content kits.
 
-CRITICAL RULES:
-1. Grounding: Rely strictly on facts, ideas, and details provided in the transcript. NEVER hallucinate facts, statistics, or claims not mentioned in the transcript.
-2. JSON Strictness: Respond ONLY with valid, raw, parseable JSON matching the exact schema specified.
-3. No Markdown Fences: Do not wrap your response in markdown code blocks like \`\`\`json. Output raw JSON only.
-4. Voice: Avoid generic AI fluff ("In today's fast-paced world", "buckle up", "game-changer"). Sound authentic, sharp, and tailored to the platform.`;
+CRITICAL EDITORIAL & GROUNDING RULES:
+1. STRICT TRANSCRIPT GROUNDING: Rely EXCLUSIVELY on facts, topics, quotes, and ideas explicitly spoken in the transcript.
+   - NEVER fabricate statistics, percentages, metrics, case studies, or external facts not in the transcript.
+   - NEVER invent names of people, companies, tools, books, or products not mentioned by the speaker.
+   - If the transcript is brief or conversational, summarize only what is present. Never pad with imaginary background story or assumed facts.
+2. PLATFORM ADAPTATION WITHOUT FACTUAL DRIFT:
+   - Adapt the packaging, hooks, tone, and pacing to match each platform's native communication culture.
+   - Do NOT simply copy-paste the same caption across platforms. Each platform must have distinct structure, framing, and hook style.
+3. HOOK QUALITY & ANTI-CLICKBAIT:
+   - Hooks must tease real moments, insights, or questions actually addressed in the video.
+   - Avoid generic, hollow clickbait ("You won't believe what happened next", "This one trick changes everything", "Mind blown 🤯") unless justified by actual spoken content.
+   - Prioritize curiosity, clear benefit, contrasting perspective, or problem/solution framing.
+4. CREATOR VOICE FIDELITY:
+   - Strictly honor the creator's defined tone, audience niche, brand guidelines, and forbidden phrases.
+   - If forbidden phrases are provided, you MUST NEVER include any of them in any generated field.
+5. NO REPETITION / NO DUPLICATES:
+   - Provide genuinely distinct angles for alternative titles, hooks, and ideas—not minor synonym swaps of the exact same sentence.
+6. JSON STRICTNESS:
+   - Respond ONLY with valid, raw, parseable JSON matching the exact schema specified in the user prompt.
+   - Do NOT wrap your output in markdown code blocks like \`\`\`json. Output raw JSON only.`;
   }
 
   /**
@@ -198,7 +216,7 @@ CRITICAL RULES:
     const segmentsFormatted = this.formatSegments(ctx.segments);
     const hasTimestamps = Boolean(ctx.segments && ctx.segments.length > 0);
 
-    return `Create a complete YouTube optimization package based on the following video transcript.
+    return `Create a complete, high-CTR YouTube optimization package based strictly on the following video transcript.
 
 CREATOR & AUDIENCE CONTEXT:
 ${creatorContext}
@@ -213,16 +231,16 @@ TIMESTAMPS / SEGMENTS:
 ${segmentsFormatted}
 """
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
+REQUIRED OUTPUT FORMAT (RAW JSON ONLY, NO MARKDOWN FENCES):
 {
   "titles": [
-    "Angle 1 (Curiosity/Problem)",
-    "Angle 2 (Direct Value/How-To)",
-    "Angle 3 (Contrarian/Bold)",
-    "Angle 4 (Actionable/Story)",
-    "Angle 5 (High CTR/Benefit-driven)"
+    "Angle 1: Search-Optimized / Clear Value Title",
+    "Angle 2: Curiosity & Question Title",
+    "Angle 3: Bold / Contrarian Insight Title",
+    "Angle 4: Story / Case-Study / Journey Title",
+    "Angle 5: High-CTR Direct Outcome / How-To Title"
   ],
-  "description": "Engaging 2-3 paragraph YouTube description summarizing core insights, with call-to-actions, based purely on transcript contents.",
+  "description": "Comprehensive YouTube description (2-3 structured paragraphs) accurately summarizing the video topics, key takeaways, and call-to-action.",
   "chapters": [
     {
       "timestamp": "00:00",
@@ -242,14 +260,14 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
 }
 
 SPECIFIC RULES:
-- "titles": Exactly 5 distinct title angles (under 70 characters each). Do not write minor variations of one sentence.
-- "description": Grounded in the transcript. Do not fabricate external links or sponsors. If a Target CTA or Links are provided in the creator context, weave them naturally into the description.
+- "titles": Provide exactly 5 distinct, high-impact titles (under 70 characters each). Each title must explore a genuinely different angle (Search, Curiosity, Contrarian, Narrative, Practical Outcome). Do NOT submit repetitive variations. Every title must be truthful to the transcript.
+- "description": Must faithfully summarize the actual discussion. Include a brief hook paragraph, a bulleted list of 3-4 key points discussed in the video, and natural placement of the creator's Target CTA or links (if provided in Creator Context). Do NOT invent sponsorships, affiliate links, or off-topic facts.
 - "chapters": ${
       hasTimestamps
-        ? 'Generate 4-8 logical chapters using real timestamps from the segments provided above. Always start with 00:00.'
+        ? 'Generate 4-8 logical, descriptive chapters based strictly on topic changes in the provided segments. Always start with 00:00 Introduction. Use MM:SS format.'
         : 'Timestamps are NOT available in this transcript. Return an empty array [] for chapters.'
     }
-- "keywords": 8-12 high-intent search tags and keywords directly relevant to the topics discussed.`;
+- "keywords": 8-12 targeted, search-relevant keywords and phrases derived directly from the video topic. Avoid generic tags like "viral" or "video".`;
   }
 
   /**
@@ -258,7 +276,7 @@ SPECIFIC RULES:
   public static buildInstagramPrompt(ctx: PromptContext): string {
     const creatorContext = this.formatCreatorContext(ctx, 'instagram');
 
-    return `Create an Instagram Reel / Post package based on the following video transcript.
+    return `Create a platform-native Instagram Reel / Carousel / Post package based strictly on the following video transcript.
 
 CREATOR & AUDIENCE CONTEXT:
 ${creatorContext}
@@ -268,16 +286,16 @@ TRANSCRIPT:
 ${ctx.transcript}
 """
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
+REQUIRED OUTPUT FORMAT (RAW JSON ONLY, NO MARKDOWN FENCES):
 {
   "hooks": [
-    "Hook 1 (Visual/Relatable hook)",
-    "Hook 2 (Mistake/Warning hook)",
-    "Hook 3 (Question hook)",
-    "Hook 4 (Proof/Outcome hook)",
-    "Hook 5 (Short punchy one-liner)"
+    "Hook 1: Relatable problem / opening visual prompt",
+    "Hook 2: Counter-intuitive insight or common mistake",
+    "Hook 3: Provocative question directly answered in the video",
+    "Hook 4: Spoken soundbite / takeaway hook",
+    "Hook 5: Punchy short 1-line text overlay (<8 words)"
   ],
-  "caption": "Compelling feed caption with line breaks for readability, key takeaways, and a comment-inducing CTA.",
+  "caption": "Scannable Instagram caption with an attention-grabbing first line, well-spaced body paragraphs with emoji bullet points, and an engagement-driving question or CTA at the end.",
   "hashtags": [
     "#relevanttag1",
     "#relevanttag2",
@@ -288,9 +306,9 @@ REQUIRED OUTPUT FORMAT (JSON ONLY):
 }
 
 SPECIFIC RULES:
-- "hooks": Exactly 5 punchy opening text overlays / voiceover hooks for Reels or Carousels. Respect the creator's preferred hook style if specified.
-- "caption": Engaging, easy to scan with emojis and spacing, reflecting the actual video topic. Incorporate the creator's Target CTA if provided.
-- "hashtags": 5-10 curated, relevant hashtags. Avoid generic spam tags (#viral, #fyp).`;
+- "hooks": Exactly 5 distinct, scroll-stopping hooks tailored for on-screen text or spoken intros. Each must represent a distinct psychological angle. Ground every hook in words and ideas actually spoken.
+- "caption": Write an Instagram-native caption: strong first line (before '...more'), clean line breaks, concise takeaways from the video, and an authentic invitation to comment or take action based on the creator's Target CTA.
+- "hashtags": 5-8 niche-specific, relevant hashtags directly tied to the video's subject. Do NOT include spam tags (#viral, #explorepage, #fyp).`;
   }
 
   /**
@@ -301,7 +319,7 @@ SPECIFIC RULES:
     const segmentsFormatted = this.formatSegments(ctx.segments);
     const hasTimestamps = Boolean(ctx.segments && ctx.segments.length > 0);
 
-    return `Identify the best viral short-form clip moments (30-60 seconds each) from this video transcript.
+    return `Identify the best high-retention short-form clip moments (strictly 15-60 seconds each) from this video transcript.
 
 CREATOR & AUDIENCE CONTEXT:
 ${creatorContext}
@@ -316,25 +334,27 @@ TIMESTAMPS / SEGMENTS:
 ${segmentsFormatted}
 """
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
+REQUIRED OUTPUT FORMAT (RAW JSON ONLY, NO MARKDOWN FENCES):
 {
   "moments": [
     {
       "start": "${hasTimestamps ? '00:15' : 'N/A'}",
       "end": "${hasTimestamps ? '01:05' : 'N/A'}",
-      "hook": "Opening hook for this clip",
-      "description": "Why this moment works as a standalone short and summary of the clip content.",
+      "hook": "Spoken or text hook opening this exact moment",
+      "description": "Clear explanation of why this moment works standalone and a concise summary of what is said.",
       "timestamps_available": ${hasTimestamps}
     }
   ]
 }
 
 SPECIFIC RULES:
-- Identify 2 to 4 high-retention moments (surprising insight, strong opinion, emotional point, or key step). Respect the creator's preferred hook style if provided.
+- Identify 2 to 4 distinct, high-impact standalone moments (e.g. sharp realization, emotional turning point, surprising contrast, actionable breakdown).
+- Every moment MUST have a clear opening hook and a satisfying conclusion or payoff.
+- Grounding: Describe strictly what happens in that segment. Do NOT invent concepts outside the transcript.
 - ${
       hasTimestamps
-        ? 'Accurate "start" and "end" timestamps formatted as MM:SS based on the provided segments.'
-        : 'Timestamps are NOT available in this transcript. Set "start": "N/A", "end": "N/A", and "timestamps_available": false. Describe the moment conceptually using quotes or topic markers from the transcript.'
+        ? 'Use exact start and end timestamps in MM:SS format derived directly from the segment timestamps above.'
+        : 'Timestamps are NOT available in this transcript. Set "start": "N/A", "end": "N/A", and "timestamps_available": false. Describe the moment conceptually using exact quotes from the transcript.'
     }
 - Do NOT fabricate timestamps if they cannot be verified from the segments list.`;
   }
@@ -347,7 +367,7 @@ SPECIFIC RULES:
     const segmentsFormatted = this.formatSegments(ctx.segments);
     const hasTimestamps = Boolean(ctx.segments && ctx.segments.length > 0);
 
-    return `Create a TikTok content package from this existing video transcript. Suggest copy and a clip idea; do not claim to edit or publish the video.
+    return `Create a native TikTok content package based strictly on this video transcript.
 
 CREATOR & AUDIENCE CONTEXT:
 ${creatorContext}
@@ -362,30 +382,30 @@ TIMESTAMPS / SEGMENTS:
 ${segmentsFormatted}
 """
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
+REQUIRED OUTPUT FORMAT (RAW JSON ONLY, NO MARKDOWN FENCES):
 {
   "hooks": [
-    "Short opening line for on-screen text or voiceover",
-    "A distinct opening angle",
-    "A third opening angle"
+    "Hook 1: First 3-second spoken or overlay hook",
+    "Hook 2: Curiosity-driven contrast angle",
+    "Hook 3: Problem/Mistake-first opening hook"
   ],
-  "caption": "A concise, editable TikTok caption based on the actual video, with a natural invitation to respond.",
+  "caption": "Concise, punchy TikTok caption with conversational phrasing, line breaks, and a conversation-starter CTA.",
   "moment": {
     "start": "${hasTimestamps ? '00:15' : 'N/A'}",
     "end": "${hasTimestamps ? '00:45' : 'N/A'}",
-    "description": "One specific moment or idea from the transcript that can stand alone as a short clip.",
+    "description": "One specific, coherent moment from the transcript that functions as a high-retention standalone clip.",
     "timestamps_available": ${hasTimestamps}
   }
 }
 
 SPECIFIC RULES:
-- Give exactly 3 distinct, brief hooks. Keep them grounded in what the speaker actually says. Respect the creator's preferred hook style if provided.
-- The caption should be concise and readable. Incorporate the creator's Target CTA or discussion hook naturally if provided. Strictly adhere to brand rules and forbidden phrases. Do not add unsupported claims, links, or generic hashtag spam.
-- Choose one useful moment from the transcript, with enough context to make sense on its own.
+- "hooks": Exactly 3 distinct, authentic hooks (under 12 words each) grounded strictly in the speaker's real words.
+- "caption": Concise (under 300 characters), conversational, and formatted with clean line breaks. Incorporate the creator's Target CTA naturally if provided. Do NOT spam generic hashtags.
+- "moment": Choose one specific moment from the transcript with enough context to stand alone.
 - ${
       hasTimestamps
-        ? 'Use only start and end times supported by the provided segments.'
-        : 'No timestamped segments are available. Set start and end to "N/A" and timestamps_available to false. Never invent times.'
+        ? 'Set "start" and "end" to real timestamps in MM:SS supported by the segments.'
+        : 'Set start and end to "N/A" and "timestamps_available": false.'
     }`;
   }
 
@@ -395,7 +415,7 @@ SPECIFIC RULES:
   public static buildLinkedInPrompt(ctx: PromptContext): string {
     const creatorContext = this.formatCreatorContext(ctx, 'linkedin');
 
-    return `Draft a polished, high-engagement LinkedIn post based on the insights in this video transcript.
+    return `Draft an insightful, high-engagement LinkedIn post based strictly on the ideas in this video transcript.
 
 CREATOR & AUDIENCE CONTEXT:
 ${creatorContext}
@@ -405,16 +425,20 @@ TRANSCRIPT:
 ${ctx.transcript}
 """
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
+REQUIRED OUTPUT FORMAT (RAW JSON ONLY, NO MARKDOWN FENCES):
 {
-  "post": "Full formatted LinkedIn post with hook headline, short scannable paragraphs, bullet points if relevant, and an engaging question at the end."
+  "post": "Full formatted LinkedIn post with hook headline, short scannable 1-2 sentence paragraphs, bullet points if breaking down steps, and an open-ended discussion question or CTA at the end."
 }
 
 SPECIFIC RULES:
-- High signal-to-noise ratio. Professional, thoughtful, but conversational.
-- No corporate jargon, no generic motivational clichés. Strictly respect any brand rules or forbidden phrases.
-- Grounded entirely in the transcript's real ideas.
-- Optimized for read-time and discussion in comments. Include the creator's Target CTA if provided.`;
+- High signal-to-noise ratio: Extract the most valuable frameworks, lessons, or stories from the transcript.
+- Structure:
+  1. Hook line that creates immediate curiosity without clickbait.
+  2. Context / the core observation in 1-2 short paragraphs.
+  3. 3-4 bulleted takeaways or actionable principles directly spoken in the video.
+  4. Closing discussion prompt or Target CTA from creator context.
+- Tone: Thoughtful, professional, conversational. Absolutely NO corporate jargon or generic motivational platitudes.
+- Grounding: Do NOT attribute false quotes or invent case studies. Every claim must trace back to the transcript.`;
   }
 
   /**
@@ -423,7 +447,7 @@ SPECIFIC RULES:
   public static buildTwitterPrompt(ctx: PromptContext): string {
     const creatorContext = this.formatCreatorContext(ctx, 'x');
 
-    return `Draft an impactful X (Twitter) standalone post and a companion value-packed thread based on this transcript.
+    return `Draft an impactful X (Twitter) standalone post and a value-packed companion thread based strictly on this video transcript.
 
 CREATOR & AUDIENCE CONTEXT:
 ${creatorContext}
@@ -433,22 +457,23 @@ TRANSCRIPT:
 ${ctx.transcript}
 """
 
-REQUIRED OUTPUT FORMAT (JSON ONLY):
+REQUIRED OUTPUT FORMAT (RAW JSON ONLY, NO MARKDOWN FENCES):
 {
-  "post": "Single punchy standalone tweet under 280 characters that delivers a sharp insight or teaser.",
+  "post": "Single punchy standalone tweet under 280 characters that delivers a sharp insight, quote, or key takeaway.",
   "thread": [
-    "Tweet 1 (Hook introducing the thread)",
-    "Tweet 2 (Core insight or context)",
-    "Tweet 3 (Key takeaway or breakdown)",
-    "Tweet 4 (Conclusion and call-to-action)"
+    "Tweet 1: Compelling thread opener / hook setting up the topic",
+    "Tweet 2: Core context or problem highlighted in the video",
+    "Tweet 3: Key insight, breakdown, or solution",
+    "Tweet 4: Actionable summary and closing takeaway or CTA"
   ]
 }
 
 SPECIFIC RULES:
-- Standalone post must be under 280 characters.
-- Thread should be 3-6 tweets maximum, cleanly broken down.
-- Each thread item should be standalone valuable and under 280 characters.
-- No hashtag stuffing. Pure insights. Include Target CTA in the final thread conclusion if specified.`;
+- "post": Strictly under 280 characters. High-density insight that stands completely on its own.
+- "thread": 3 to 5 tweets maximum. Each tweet MUST be under 280 characters and deliver one distinct idea.
+- Flow: Thread must progress logically from opening hook to conclusion.
+- Grounding: Every tweet must reflect actual insights, examples, or thoughts from the transcript.
+- No hashtag stuffing. Maximum 1-2 relevant hashtags on the final tweet only if helpful. Weave in the creator's Target CTA on the final tweet if provided.`;
   }
 
   /**

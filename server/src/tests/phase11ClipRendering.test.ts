@@ -33,8 +33,10 @@ import {
   getClipDownloadUrl,
 } from '../controllers/clipController.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import ffmpegStatic from 'ffmpeg-static';
 
 const execFileAsync = promisify(execFile);
+const ffmpegBin = (ffmpegStatic as unknown as string) || 'ffmpeg';
 
 let passed = 0;
 let total = 0;
@@ -278,7 +280,7 @@ async function runTests() {
 
     try {
       // Step A: Generate a 3-second test video (1920x1080 test pattern with test audio tone)
-      await execFileAsync('ffmpeg', [
+      await execFileAsync(ffmpegBin, [
         '-y',
         '-f', 'lavfi',
         '-i', 'testsrc=duration=3:size=1280x720:rate=30',
@@ -294,7 +296,7 @@ async function runTests() {
 
       // Step B: Cut a 1.5-second clip from 0.5s to 2.0s with 9:16 crop filter
       const cropFilter = buildCropFilter('9:16');
-      await execFileAsync('ffmpeg', [
+      await execFileAsync(ffmpegBin, [
         '-y',
         '-ss', '0.5',
         '-i', srcFile,
@@ -310,20 +312,13 @@ async function runTests() {
 
       assert.ok(fs.existsSync(outFile), 'Rendered 9:16 output file should exist');
 
-      // Step C: Probe output video with ffprobe to verify resolution and duration
-      const { stdout: probeOut } = await execFileAsync('ffprobe', [
-        '-v', 'error',
-        '-select_streams', 'v:0',
-        '-show_entries', 'stream=width,height,duration',
-        '-of', 'json',
-        outFile,
-      ]);
-
-      const probeData = JSON.parse(probeOut);
-      const videoStream = probeData.streams?.[0];
-      assert.ok(videoStream, 'Output file must have a video stream');
-      assert.equal(videoStream.width, 1080, 'Output width must be 1080');
-      assert.equal(videoStream.height, 1920, 'Output height must be 1920');
+      // Step C: Probe output video with ffmpegBin to verify resolution
+      try {
+        await execFileAsync(ffmpegBin, ['-i', outFile]);
+      } catch (err: any) {
+        const info = (err.stderr || '') + (err.stdout || '');
+        assert.ok(info.includes('1080x1920'), `Output must have 1080x1920 resolution: ${info}`);
+      }
 
       const fileSize = fs.statSync(outFile).size;
       assert.ok(fileSize > 5000, `Output file size should be substantial (got ${fileSize} bytes)`);

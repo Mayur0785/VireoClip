@@ -81,17 +81,26 @@ def analyze_video(video_path: str, sample_fps: float = 4.0, start_sec: float = 0
 
         # Convert to grayscale for detection
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.equalizeHist(gray)
 
-        # Detect faces
-
+        # Detect faces: try raw grayscale first with standard minNeighbors
         faces = cascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
-            minNeighbors=5,
+            minNeighbors=4,
             minSize=(int(source_width * 0.04), int(source_height * 0.04)),
             flags=cv2.CASCADE_SCALE_IMAGE
         )
+
+        # Fallback to histogram equalized image if no face detected in low-contrast conditions
+        if len(faces) == 0:
+            eq_gray = cv2.equalizeHist(gray)
+            faces = cascade.detectMultiScale(
+                eq_gray,
+                scaleFactor=1.1,
+                minNeighbors=4,
+                minSize=(int(source_width * 0.04), int(source_height * 0.04)),
+                flags=cv2.CASCADE_SCALE_IMAGE
+            )
 
         face_list = []
         for (x, y, w, h) in faces:

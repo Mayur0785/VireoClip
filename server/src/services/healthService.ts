@@ -38,3 +38,34 @@ export async function getDetailedHealthStatus(): Promise<DetailedHealthStatus> {
   const connected = await isMongoHealthy();
   return { ...health, status: connected ? 'ok' : 'error', services: { ...health.services, mongoConnected: connected } };
 }
+
+export interface ReadinessStatus {
+  status: 'ready' | 'not_ready';
+  timestamp: string;
+  checks: {
+    mongodb: boolean;
+    supabase: boolean;
+    storage: boolean;
+    aiProvider: boolean;
+  };
+}
+
+export async function getReadinessStatus(): Promise<ReadinessStatus> {
+  const mongoConnected = await isMongoHealthy();
+  const supabaseOk = isServerSupabaseConfigured;
+  const storageOk = Boolean(config.r2AccountId && config.r2AccessKeyId && config.r2SecretAccessKey);
+  const aiOk = Boolean(config.openrouterApiKey || config.groqApiKey);
+
+  const isReady = mongoConnected && supabaseOk && storageOk && aiOk;
+
+  return {
+    status: isReady ? 'ready' : 'not_ready',
+    timestamp: new Date().toISOString(),
+    checks: {
+      mongodb: mongoConnected,
+      supabase: supabaseOk,
+      storage: storageOk,
+      aiProvider: aiOk,
+    },
+  };
+}

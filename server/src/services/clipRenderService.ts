@@ -1,5 +1,5 @@
 import { createClipWithJob } from '../db/repositories/clipRepository.js';
-import { isMongoConfigured } from '../db/mongoClient.js';
+import { isMongoConfigured, getMongoDb } from '../db/mongoClient.js';
 import { dataRepository } from '../db/repositories/dataRepository.js';
 import fs from 'fs';
 import path from 'path';
@@ -215,25 +215,77 @@ export class ClipRenderService {
       throw err;
     }
 
-    activeRenderSet.add(clipId);
+    // Distributed worker and lease identification
+    const workerId = `worker_${process.pid}_${crypto.randomBytes(4).toString('hex')}`;
+    const RENDER_LOCK_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes stale lease recovery
+    const now = new Date();
+    const staleCutoff = new Date(now.getTime() - RENDER_LOCK_TIMEOUT_MS);
 
-    // Ensure a render job exists
     let jobId = existingJobId;
+    const db = await getMongoDb();
+    const renderJobsCol = db.collection('render_jobs');
+
+    // Ensure a render job exists in MongoDB
     if (!jobId) {
-      const { data: newJob } = await dataRepository
-        .from('render_jobs')
-        .insert({
+      const existingJob = await renderJobsCol.findOne({ clip_id: clipId, user_id: userId }, { sort: { created_at: -1 } });
+      if (existingJob) {
+        jobId = existingJob.id;
+      } else {
+        const newId = crypto.randomUUID();
+        await renderJobsCol.insertOne({
+          id: newId,
           clip_id: clipId,
           user_id: userId,
           status: 'queued',
           progress: 0,
           stage: 'queued',
-          attempts: 1,
-        })
-        .select()
-        .single();
-      jobId = newJob?.id;
+          attempts: 0,
+          max_attempts: 3,
+          worker_id: null,
+          locked_at: null,
+          created_at: now,
+          updated_at: now,
+        });
+        jobId = newId;
+      }
     }
+
+    // Atomic distributed lease acquisition:
+    // Claim only if queued OR processing with an expired stale lock
+    const claimedJob = await renderJobsCol.findOneAndUpdate(
+      {
+        id: jobId,
+        $or: [
+          { status: 'queued' },
+          { status: 'processing', locked_at: { $lt: staleCutoff } },
+        ],
+      },
+      {
+        $set: {
+          status: 'processing',
+          stage: 'downloading',
+          worker_id: workerId,
+          locked_at: now,
+          started_at: now,
+          updated_at: now,
+        },
+        $inc: { attempts: 1 },
+      },
+      { returnDocument: 'after' }
+    );
+
+    if (!claimedJob) {
+      const currentJob = await renderJobsCol.findOne({ id: jobId });
+      if (currentJob?.status === 'completed') {
+        logger.info(`[ClipRender] Clip ${clipId} is already rendered and completed.`);
+        return;
+      }
+      const err = new Error('Render is already in progress for this clip by another worker.');
+      (err as any).code = 'RENDER_ALREADY_ACTIVE';
+      throw err;
+    }
+
+    activeRenderSet.add(clipId);
 
     const uniqueTag = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const tempDir = path.join(os.tmpdir(), `vireo-render-${clipId}-${uniqueTag}`);
@@ -267,6 +319,10 @@ export class ClipRenderService {
 
       let cropFilter = buildCropFilter(clip.aspect_ratio as ClipAspectRatio, clip.crop_config);
 
+      let actualReframeMode: 'smart' | 'fallback_center' | 'manual' = 
+        clip.crop_config?.mode === 'manual' ? 'manual' : 'fallback_center';
+      let reframeMetadata: Record<string, any> | undefined = undefined;
+
       // Phase 13: Dynamic Smart Auto-Reframe
       if (clip.crop_config?.mode === 'smart') {
         try {
@@ -279,6 +335,19 @@ export class ClipRenderService {
           ) {
             if (track.isStale) {
               logger.warn(`[ClipRender] Smart reframe track is stale for clip ${clipId}. Falling back to center crop.`);
+              actualReframeMode = 'fallback_center';
+              reframeMetadata = {
+                reason: 'stale_track',
+                detected_face_count: track.detected_face_count || 0,
+              };
+              cropFilter = buildCropFilter(clip.aspect_ratio as ClipAspectRatio, { focusX: 0.5, focusY: 0.5 });
+            } else if ((track.detected_face_count || 0) === 0 || !track.dominant_track_id) {
+              logger.info(`[ClipRender] No subject detected in smart reframe track for clip ${clipId}. Using fallback center.`);
+              actualReframeMode = 'fallback_center';
+              reframeMetadata = {
+                reason: 'no_subject_detected',
+                detected_face_count: 0,
+              };
               cropFilter = buildCropFilter(clip.aspect_ratio as ClipAspectRatio, { focusX: 0.5, focusY: 0.5 });
             } else {
               cropFilter = SmartReframeService.buildSmartCropFilter(
@@ -288,14 +357,30 @@ export class ClipRenderService {
                 track.source_height || 1080,
                 durationSec
               );
+              actualReframeMode = 'smart';
+              reframeMetadata = {
+                dominant_track_id: track.dominant_track_id,
+                detected_face_count: track.detected_face_count,
+                keyframe_count: track.smoothed_keyframes.length,
+                dominant_score: track.metadata?.dominant_score,
+              };
               logger.info(`[ClipRender] Applied dynamic smart reframe filter with ${track.smoothed_keyframes.length} keyframes for clip ${clipId}`);
             }
           } else {
             logger.warn(`[ClipRender] No ready smart reframe track found for clip ${clipId}. Falling back to center crop.`);
+            actualReframeMode = 'fallback_center';
+            reframeMetadata = {
+              reason: 'no_ready_track',
+            };
             cropFilter = buildCropFilter(clip.aspect_ratio as ClipAspectRatio, { focusX: 0.5, focusY: 0.5 });
           }
         } catch (reframeErr: any) {
           logger.warn(`[ClipRender] Smart reframe resolution error for clip ${clipId}: ${reframeErr.message}. Falling back to center crop.`);
+          actualReframeMode = 'fallback_center';
+          reframeMetadata = {
+            reason: 'error',
+            error: reframeErr.message,
+          };
           cropFilter = buildCropFilter(clip.aspect_ratio as ClipAspectRatio, { focusX: 0.5, focusY: 0.5 });
         }
       }
@@ -315,8 +400,8 @@ export class ClipRenderService {
           });
 
           if (captionResult.cues.length > 0 && fs.existsSync(assPath)) {
-            const safeAss = assPath.replace(/\\/g, '/');
-            videoFilters.push(`ass='${safeAss}'`);
+            const safeAss = assPath.replace(/\\/g, '/').replace(':', '\\\\:');
+            videoFilters.push(`ass=${safeAss}`);
             logger.info(`[ClipRender] Burning ${captionResult.cues.length} caption cues using style "${clip.caption_style || 'clean'}"`);
           }
         } catch (capErr: any) {
@@ -366,13 +451,17 @@ export class ClipRenderService {
           }
         }
 
-        cmd.outputOptions([
+        const outputOpts = [
           '-pix_fmt yuv420p',
           '-preset fast',
           '-crf 22',
-          '-b:a 128k',
           '-movflags +faststart',
-        ])
+        ];
+        if (!clip.muted) {
+          outputOpts.push('-b:a 128k');
+        }
+
+        cmd.outputOptions(outputOpts)
         .output(outputPath);
 
         // Explicit timeout enforcement
@@ -449,6 +538,8 @@ export class ClipRenderService {
           render_status: 'ready',
           output_storage_path: finalStoragePath,
           output_object_key: finalStoragePath,
+          reframe_mode: actualReframeMode,
+          reframe_metadata: reframeMetadata || null,
           render_error_code: null,
           render_error_message: null,
           updated_at: new Date().toISOString(),
@@ -493,19 +584,57 @@ export class ClipRenderService {
           .eq('id', clipId);
       } catch {}
 
-      // Update render job to failed
+      // Update render job status with retry logic (Step 5)
       if (jobId) {
         try {
-          await dataRepository
-            .from('render_jobs')
-            .update({
-              status: 'failed',
-              error_code: code,
-              error_message: message.substring(0, 500),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', jobId);
-        } catch {}
+          const currentJob = await db.collection('render_jobs').findOne({ id: jobId });
+          const attempts = currentJob?.attempts || 1;
+          const maxAttempts = currentJob?.max_attempts || 3;
+          const isTransient = ['RENDER_TIMEOUT', 'STORAGE_UNAVAILABLE', 'FFMPEG_FAILED', 'NETWORK_ERROR'].includes(code);
+
+          if (isTransient && attempts < maxAttempts) {
+            // Exponential backoff: attempt 1 -> 2s, attempt 2 -> 5s, attempt 3 -> 15s
+            const backoffDelays = [2000, 5000, 15000];
+            const delayMs = backoffDelays[attempts - 1] || 15000;
+            const nextRetryAt = new Date(Date.now() + delayMs);
+
+            await db.collection('render_jobs').updateOne(
+              { id: jobId },
+              {
+                $set: {
+                  status: 'queued',
+                  stage: 'queued',
+                  worker_id: null,
+                  locked_at: null,
+                  next_retry_at: nextRetryAt,
+                  error_code: code,
+                  error_message: message.substring(0, 500),
+                  updated_at: new Date(),
+                },
+              }
+            );
+            logger.warn(`[ClipRender] Transient failure for clip ${clipId}. Job ${jobId} scheduled for retry ${attempts + 1}/${maxAttempts} at ${nextRetryAt.toISOString()}`);
+          } else {
+            await db.collection('render_jobs').updateOne(
+              { id: jobId },
+              {
+                $set: {
+                  status: 'failed',
+                  stage: 'failed',
+                  worker_id: null,
+                  locked_at: null,
+                  next_retry_at: null,
+                  error_code: code,
+                  error_message: message.substring(0, 500),
+                  updated_at: new Date(),
+                },
+              }
+            );
+            logger.error(`[ClipRender] Permanent render job failure for clip ${clipId} (${attempts}/${maxAttempts})`);
+          }
+        } catch (dbErr) {
+          logger.error('Failed to update render job status on failure', { jobId, dbErr });
+        }
       }
     } finally {
       // 6. Reliable cleanup of all temporary directories and files

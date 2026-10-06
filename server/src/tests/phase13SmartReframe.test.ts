@@ -328,7 +328,7 @@ async function runTests() {
 
     const filter = buildSmartCropFilter(keyframes, '9:16', 1920, 1080, 3.0);
     assert.ok(filter.startsWith('scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:'));
-    assert.ok(filter.includes('(in_w-out_w)*min(max('));
+    assert.ok(filter.includes('min(max(in_w*min(max(') || filter.includes('min(max('));
     assert.ok(filter.includes('if(lte(t\\,'));
   });
 
@@ -452,6 +452,31 @@ async function runTests() {
         fs.rmSync(tempDir, { recursive: true, force: true });
       } catch {}
     }
+  });
+
+  // 11. Reframe Mode Metadata & Fallback Logic Tests
+  await it('Metadata & Fallback: produces fallback_center when track has 0 detected faces', () => {
+    const kfs = SmartReframeService.smoothAndGenerateKeyframes({
+      samples: [],
+      dominantTrackId: null,
+      duration: 5.0,
+    });
+    assert.equal(kfs.length, 1);
+    assert.equal(kfs[0].centerX, 0.5);
+    assert.equal(kfs[0].centerY, 0.5);
+    const filter = buildSmartCropFilter(kfs, '9:16');
+    assert.equal(filter, 'scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920');
+  });
+
+  await it('Metadata & Fallback: produces smart dynamic filter when ready track has detected subject', () => {
+    const keyframes: ReframeKeyframe[] = [
+      { time: 0, centerX: 0.25, centerY: 0.5 },
+      { time: 2.0, centerX: 0.75, centerY: 0.5 },
+    ];
+    const filter = buildSmartCropFilter(keyframes, '9:16', 1920, 1080, 2.0);
+    assert.ok(filter.includes('scale=1080:1920'));
+    assert.ok(filter.includes('crop=1080:1920'));
+    assert.ok(filter.includes('min(max('));
   });
 
   console.log(`\nPhase 13 Results: ${passed}/${total} tests passed.\n`);

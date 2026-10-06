@@ -28,6 +28,9 @@ class ProjectService {
     };
   }
 
+  private inFlightProjectsPromise: Promise<Project[]> | null = null;
+  private inFlightProjectPromises: Map<string, Promise<Project | null>> = new Map();
+
   private cacheProject(row: any): Project {
     const project = this.mapRow(row);
     this.projects = [project, ...this.projects.filter((p) => p.id !== project.id)];
@@ -36,20 +39,42 @@ class ProjectService {
   }
 
   async fetchProjects(_userId?: string): Promise<Project[]> {
-    const data = await backendRequest<{ projects: any[] }>('/projects');
-    this.projects = (data.projects || []).map((row) => this.mapRow(row));
-    window.dispatchEvent(new CustomEvent('vireo_project_updated'));
-    return this.getProjects();
+    if (this.inFlightProjectsPromise) {
+      return this.inFlightProjectsPromise;
+    }
+
+    this.inFlightProjectsPromise = (async () => {
+      try {
+        const data = await backendRequest<{ projects: any[] }>('/projects');
+        this.projects = (data.projects || []).map((row) => this.mapRow(row));
+        return this.getProjects();
+      } finally {
+        this.inFlightProjectsPromise = null;
+      }
+    })();
+
+    return this.inFlightProjectsPromise;
   }
 
   async fetchProject(id: string): Promise<Project | null> {
-    try {
-      const data = await backendRequest<{ project: any }>(`/projects/${id}`);
-      return this.cacheProject(data.project);
-    } catch (error: any) {
-      if (error.status === 404) return null;
-      throw error;
+    if (this.inFlightProjectPromises.has(id)) {
+      return this.inFlightProjectPromises.get(id)!;
     }
+
+    const promise = (async () => {
+      try {
+        const data = await backendRequest<{ project: any }>(`/projects/${id}`);
+        return this.cacheProject(data.project);
+      } catch (error: any) {
+        if (error.status === 404) return null;
+        throw error;
+      } finally {
+        this.inFlightProjectPromises.delete(id);
+      }
+    })();
+
+    this.inFlightProjectPromises.set(id, promise);
+    return promise;
   }
 
   getProjects(): Project[] { return [...this.projects]; }
@@ -65,6 +90,19 @@ class ProjectService {
     const data = await backendRequest<{ project: any }>('/projects', {
       method: 'POST', body: JSON.stringify({
         id: input.id || crypto.randomUUID(), title: input.title, source_type: input.sourceType || 'upload', notes: input.notes || '',
+      }),
+    });
+    return this.cacheProject(data.project);
+  }
+
+  async ingestProjectUrlAsync(input: { url: string; title?: string; notes?: string; id?: string }): Promise<Project> {
+    const data = await backendRequest<{ project: any }>('/projects/ingest-url', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: input.id || crypto.randomUUID(),
+        url: input.url,
+        title: input.title,
+        notes: input.notes,
       }),
     });
     return this.cacheProject(data.project);

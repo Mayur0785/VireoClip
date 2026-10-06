@@ -12,6 +12,7 @@ import {
 import { deletePrefix, projectObjectPrefix, sourceObjectKey, signSourceUpload, headObject, signObjectGet } from '../services/objectStorageService.js';
 import { deleteProjectRecords } from '../db/repositories/deletionRepository.js';
 import { claimProjectProcessing } from '../db/repositories/projectRepository.js';
+import { UrlIngestionService } from '../services/urlIngestionService.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 
@@ -283,6 +284,80 @@ export const createProject = async (req: AuthenticatedRequest, res: Response): P
   }
 };
 
+/**
+ * POST /api/projects/ingest-url
+ * Ingests a public video URL: validates URL & SSRF, downloads to temp disk with byte limit,
+ * probes video streams with FFmpeg, uploads to R2, and creates a project in 'uploaded' status.
+ */
+export const ingestProjectUrl = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!isMongoConfigured) {
+    res.status(503).json({
+      status: 'error',
+      code: 'SERVICE_UNAVAILABLE',
+      message: 'Database service is not configured.',
+    });
+    return;
+  }
+
+  const { url, title, notes, id } = req.body || {};
+
+  if (!url || typeof url !== 'string' || !url.trim()) {
+    res.status(400).json({ status: 'error', code: 'INVALID_URL', message: 'Valid video URL is required.' });
+    return;
+  }
+
+  if (id && !isValidUUID(id)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Supplied project ID must be a valid UUID.' });
+    return;
+  }
+
+  try {
+    const result = await UrlIngestionService.ingestUrlToProject({
+      userId,
+      projectId: id,
+      url: url.trim(),
+      title: typeof title === 'string' ? title.trim() : undefined,
+      notes: typeof notes === 'string' ? notes.trim() : undefined,
+    });
+
+    const { data: project } = await dataRepository
+      .from('projects')
+      .select('*')
+      .eq('id', result.projectId)
+      .eq('user_id', userId)
+      .single();
+
+    res.status(201).json({
+      status: 'ok',
+      project,
+      message: 'Video URL successfully ingested into project.',
+    });
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    const code = err.code || 'INGESTION_FAILED';
+    const message = err.message || 'Failed to ingest video URL.';
+
+    logger.error('Error during URL ingestion', {
+      requestId: req.requestId,
+      userId,
+      code,
+      error: message,
+    });
+
+    res.status(status).json({
+      status: 'error',
+      code,
+      message,
+    });
+  }
+};
+
 /** Short lived, owner-scoped upload grant. The browser receives only a URL and headers. */
 export const createProjectUploadUrl = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const userId = req.user?.id;
@@ -517,11 +592,11 @@ export const processProject = async (req: AuthenticatedRequest, res: Response): 
     }
 
     // 3. Validate source type & presence of source_url
-    if (project.source_type !== 'upload') {
+    if (project.source_type !== 'upload' && project.source_type !== 'url') {
       res.status(400).json({
         status: 'error',
         code: 'UNSUPPORTED_SOURCE',
-        message: 'Processing currently supports direct video uploads.',
+        message: 'Processing supports direct uploads and ingested video URLs.',
       });
       return;
     }
@@ -550,7 +625,7 @@ export const processProject = async (req: AuthenticatedRequest, res: Response): 
     const rawEstimate = Number(req.body?.estimated_minutes);
     const estimatedMinutes = !isNaN(rawEstimate) && rawEstimate > 0 ? Math.min(Math.max(rawEstimate, 0.5), 60.0) : 3.0;
 
-    const reservation = await UsageService.reserveQuota(userId, projectId, attemptId, estimatedMinutes);
+    const reservation = await UsageService.reserveQuota(userId, projectId, attemptId, estimatedMinutes, req.user?.email);
 
     if (!reservation.allowed) {
       logger.warn('User exceeded processing quota', {

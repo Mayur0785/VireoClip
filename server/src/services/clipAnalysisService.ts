@@ -320,8 +320,32 @@ export class ClipAnalysisService {
         responseFormat: 'json_object',
       });
 
+      logger.info(`AI clip analysis raw response for ${projectId}: ${JSON.stringify(aiResponse)}`);
+
       // 5. Parse and validate AI candidates
-      const aiCandidates = ClipAnalysisService.parseAIResponse(aiResponse);
+      let aiCandidates = ClipAnalysisService.parseAIResponse(aiResponse);
+      if (aiCandidates.length === 0 && segments.length > 0) {
+        // If the video is short (or has very few segments) and LLM produced 0 clips, create a highlight candidate spanning the transcript
+        const seg = segments[0];
+        const segDur = seg.end - seg.start;
+        if (segDur >= 2.0) {
+          logger.info(`Creating fallback clip candidate for short video (duration: ${segDur.toFixed(2)}s)`);
+          aiCandidates = [{
+            start_segment_index: 0,
+            end_segment_index: segments.length - 1,
+            title: project.title || 'Video Highlight',
+            hook: seg.text.slice(0, 50),
+            reason: 'Strongest standalone moment in the source clip.',
+            category: 'insight',
+            hook_score: 85,
+            standalone_score: 85,
+            insight_score: 85,
+            emotion_score: 80,
+            platform_score: 85,
+          }];
+        }
+      }
+
       if (aiCandidates.length === 0) {
         logger.warn(`AI clip analysis returned 0 candidates for project ${projectId}.`);
         return [];
@@ -355,7 +379,7 @@ export class ClipAnalysisService {
         const duration_seconds = Number((end_seconds - start_seconds).toFixed(3));
 
         // Duration constraints: strictly 15s to 90s (adaptive for short test videos under 15s)
-        const minDurationLimit = (transcript.duration_seconds && transcript.duration_seconds < 15) ? 3.0 : 15.0;
+        const minDurationLimit = (transcript.duration_seconds && transcript.duration_seconds < 15) ? 2.0 : 15.0;
         if (duration_seconds < minDurationLimit || duration_seconds > 90.0) {
           logger.info(`Rejected candidate "${ai.title}": duration ${duration_seconds}s outside [${minDurationLimit}s, 90s] window.`);
           continue;

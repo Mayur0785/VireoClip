@@ -72,11 +72,14 @@ export interface Project {
 export interface CreatorProfile {
   name: string;
   email: string;
+  brand_name?: string;
   niche: string;
   audience: string;
+  brand_description?: string;
   language: string;
   tone: string;
   custom_tone?: string;
+  content_goals?: string;
   website_url?: string;
   newsletter_url?: string;
   podcast_url?: string;
@@ -217,6 +220,8 @@ export interface RenderedClip {
   muted?: boolean;
   editor_version?: number;
   render_version?: number;
+  reframe_mode?: 'smart' | 'fallback_center' | 'manual';
+  reframe_metadata?: Record<string, any>;
 }
 
 // ── Phase 12: Caption Engine & Focused Clip Editor ───────────────

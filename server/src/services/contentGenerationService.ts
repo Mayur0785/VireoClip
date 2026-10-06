@@ -3,6 +3,7 @@ import { logger } from '../utils/logger.js';
 import { ContentPromptService, PromptContext } from './contentPromptService.js';
 import { defaultAiProvider, AIProviderClient } from './aiProviderClient.js';
 import { ContentOutputService } from './contentOutputService.js';
+import { ContentQualityUtils } from '../utils/contentQualityUtils.js';
 import {
   OutputPlatform,
   ContentOutputRecord,
@@ -115,11 +116,14 @@ export class ContentGenerationService {
 
     if (profileData) {
       creatorProfile = {
+        brand_name: profileData.brand_name || '',
         niche: profileData.niche || '',
         target_audience: profileData.target_audience || '',
+        brand_description: profileData.brand_description || '',
         language: profileData.language || 'English',
         tone: profileData.tone || 'Friendly',
         custom_tone: profileData.custom_tone || '',
+        content_goals: profileData.content_goals || '',
         website_url: profileData.website_url || '',
         newsletter_url: profileData.newsletter_url || '',
         podcast_url: profileData.podcast_url || '',
@@ -172,13 +176,15 @@ export class ContentGenerationService {
         logger.info(`Generating ${p} content for project ${projectId}...`, { projectId, platform: p });
         const userPrompt = ContentPromptService.buildPromptForPlatform(p, promptContext);
 
+        const forbiddenPhrases = creatorProfile?.forbidden_phrases;
+
         switch (p) {
           case 'youtube': {
             const result = await this.aiProvider.generateJsonCompletion<YouTubeGeneratedContent>({
               systemPrompt,
               userPrompt,
             });
-            this.validateYouTubeOutput(result);
+            this.validateYouTubeOutput(result, forbiddenPhrases);
             rowsToInsert.push(...ContentOutputService.transformYouTubeToRows(projectId, result));
             break;
           }
@@ -187,7 +193,7 @@ export class ContentGenerationService {
               systemPrompt,
               userPrompt,
             });
-            this.validateInstagramOutput(result);
+            this.validateInstagramOutput(result, forbiddenPhrases);
             rowsToInsert.push(...ContentOutputService.transformInstagramToRows(projectId, result));
             break;
           }
@@ -196,7 +202,7 @@ export class ContentGenerationService {
               systemPrompt,
               userPrompt,
             });
-            this.validateShortsOutput(result);
+            this.validateShortsOutput(result, forbiddenPhrases);
             rowsToInsert.push(...ContentOutputService.transformShortsToRows(projectId, result));
             break;
           }
@@ -205,7 +211,7 @@ export class ContentGenerationService {
               systemPrompt,
               userPrompt,
             });
-            this.validateTikTokOutput(result);
+            this.validateTikTokOutput(result, forbiddenPhrases);
             if (!promptContext.segments?.length) {
               result.moment.start = 'N/A';
               result.moment.end = 'N/A';
@@ -219,7 +225,7 @@ export class ContentGenerationService {
               systemPrompt,
               userPrompt,
             });
-            this.validateLinkedInOutput(result);
+            this.validateLinkedInOutput(result, forbiddenPhrases);
             rowsToInsert.push(...ContentOutputService.transformLinkedInToRows(projectId, result));
             break;
           }
@@ -228,7 +234,7 @@ export class ContentGenerationService {
               systemPrompt,
               userPrompt,
             });
-            this.validateTwitterOutput(result);
+            this.validateTwitterOutput(result, forbiddenPhrases);
             rowsToInsert.push(...ContentOutputService.transformTwitterToRows(projectId, result));
             break;
           }
@@ -277,8 +283,8 @@ export class ContentGenerationService {
     }
   }
 
-  // Validation routines for structured outputs
-  private validateYouTubeOutput(out: any): void {
+  // Validation routines and quality filters for structured outputs
+  private validateYouTubeOutput(out: any, forbiddenPhrases?: string): void {
     if (!out || typeof out !== 'object') throw new Error('Invalid YouTube output structure.');
     if (!Array.isArray(out.titles) || out.titles.length === 0) {
       throw new Error('YouTube generation did not return title suggestions.');
@@ -286,9 +292,21 @@ export class ContentGenerationService {
     if (!out.description || typeof out.description !== 'string') {
       throw new Error('YouTube generation did not return description.');
     }
+
+    // Filter duplicates and near-identical titles
+    out.titles = ContentQualityUtils.deduplicateStrings(out.titles);
+    if (out.titles.length === 0) {
+      throw new Error('All generated YouTube titles were duplicates or empty.');
+    }
+
+    // Sanitize forbidden phrases if specified
+    if (forbiddenPhrases) {
+      out.titles = out.titles.map((t: string) => ContentQualityUtils.sanitizeForbiddenPhrases(t, forbiddenPhrases));
+      out.description = ContentQualityUtils.sanitizeForbiddenPhrases(out.description, forbiddenPhrases);
+    }
   }
 
-  private validateInstagramOutput(out: any): void {
+  private validateInstagramOutput(out: any, forbiddenPhrases?: string): void {
     if (!out || typeof out !== 'object') throw new Error('Invalid Instagram output structure.');
     if (!Array.isArray(out.hooks) || out.hooks.length === 0) {
       throw new Error('Instagram generation did not return hooks.');
@@ -296,16 +314,34 @@ export class ContentGenerationService {
     if (!out.caption || typeof out.caption !== 'string') {
       throw new Error('Instagram generation did not return caption.');
     }
+
+    // Deduplicate hooks
+    out.hooks = ContentQualityUtils.deduplicateStrings(out.hooks);
+    if (out.hooks.length === 0) {
+      throw new Error('All generated Instagram hooks were duplicates or empty.');
+    }
+
+    if (forbiddenPhrases) {
+      out.hooks = out.hooks.map((h: string) => ContentQualityUtils.sanitizeForbiddenPhrases(h, forbiddenPhrases));
+      out.caption = ContentQualityUtils.sanitizeForbiddenPhrases(out.caption, forbiddenPhrases);
+    }
   }
 
-  private validateShortsOutput(out: any): void {
+  private validateShortsOutput(out: any, forbiddenPhrases?: string): void {
     if (!out || typeof out !== 'object') throw new Error('Invalid Shorts output structure.');
     if (!Array.isArray(out.moments)) {
       throw new Error('Shorts generation did not return moments array.');
     }
+
+    if (forbiddenPhrases) {
+      for (const m of out.moments) {
+        if (m.hook) m.hook = ContentQualityUtils.sanitizeForbiddenPhrases(m.hook, forbiddenPhrases);
+        if (m.description) m.description = ContentQualityUtils.sanitizeForbiddenPhrases(m.description, forbiddenPhrases);
+      }
+    }
   }
 
-  private validateTikTokOutput(out: any): void {
+  private validateTikTokOutput(out: any, forbiddenPhrases?: string): void {
     if (!out || typeof out !== 'object') throw new Error('Invalid TikTok output structure.');
     if (!Array.isArray(out.hooks) || out.hooks.length === 0 ||
       !out.hooks.every((hook: unknown) => typeof hook === 'string' && hook.trim())) {
@@ -317,19 +353,48 @@ export class ContentGenerationService {
     if (!out.moment || typeof out.moment.description !== 'string' || !out.moment.description.trim()) {
       throw new Error('TikTok generation did not return a moment idea.');
     }
+
+    // Deduplicate hooks
+    out.hooks = ContentQualityUtils.deduplicateStrings(out.hooks);
+    if (out.hooks.length === 0) {
+      throw new Error('All generated TikTok hooks were duplicates or empty.');
+    }
+
+    if (forbiddenPhrases) {
+      out.hooks = out.hooks.map((h: string) => ContentQualityUtils.sanitizeForbiddenPhrases(h, forbiddenPhrases));
+      out.caption = ContentQualityUtils.sanitizeForbiddenPhrases(out.caption, forbiddenPhrases);
+      if (out.moment.description) {
+        out.moment.description = ContentQualityUtils.sanitizeForbiddenPhrases(out.moment.description, forbiddenPhrases);
+      }
+    }
   }
 
-  private validateLinkedInOutput(out: any): void {
+  private validateLinkedInOutput(out: any, forbiddenPhrases?: string): void {
     if (!out || typeof out !== 'object') throw new Error('Invalid LinkedIn output structure.');
     if (!out.post || typeof out.post !== 'string') {
       throw new Error('LinkedIn generation did not return post text.');
     }
+
+    if (forbiddenPhrases) {
+      out.post = ContentQualityUtils.sanitizeForbiddenPhrases(out.post, forbiddenPhrases);
+    }
   }
 
-  private validateTwitterOutput(out: any): void {
+  private validateTwitterOutput(out: any, forbiddenPhrases?: string): void {
     if (!out || typeof out !== 'object') throw new Error('Invalid Twitter output structure.');
     if (!out.post || typeof out.post !== 'string') {
       throw new Error('Twitter generation did not return post text.');
+    }
+
+    if (Array.isArray(out.thread)) {
+      out.thread = ContentQualityUtils.deduplicateStrings(out.thread);
+    }
+
+    if (forbiddenPhrases) {
+      out.post = ContentQualityUtils.sanitizeForbiddenPhrases(out.post, forbiddenPhrases);
+      if (Array.isArray(out.thread)) {
+        out.thread = out.thread.map((t: string) => ContentQualityUtils.sanitizeForbiddenPhrases(t, forbiddenPhrases));
+      }
     }
   }
 }

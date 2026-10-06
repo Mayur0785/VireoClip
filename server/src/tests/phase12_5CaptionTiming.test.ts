@@ -388,10 +388,10 @@ describe('Phase 12.5 Pro Caption Timing & Advanced Caption Editor Tests', () => 
       assert.ok(fs.existsSync(assSubtitlePath), 'ASS subtitle file was not generated');
 
       // 3. Burn subtitles into output MP4 using FFmpeg libass filter
-      const safeAss = assSubtitlePath.replace(/\\/g, '/');
+      const safeAss = assSubtitlePath.replace(/\\/g, '/').replace(':', '\\\\:');
       await new Promise<void>((resolve, reject) => {
         ffmpeg(sourceVideoPath)
-          .videoFilters([`ass='${safeAss}'`])
+          .videoFilters([`ass=${safeAss}`])
           .outputOptions(['-pix_fmt yuv420p', '-c:v libx264', '-c:a copy', '-preset ultrafast'])
           .output(outputVideoPath)
           .on('end', () => resolve())

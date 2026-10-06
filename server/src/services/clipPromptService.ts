@@ -87,11 +87,11 @@ export class ClipPromptService {
       '',
       'DURATION CONSTRAINTS:',
       durationSeconds && durationSeconds < 15
-        ? `- This video is short (~${Math.round(durationSeconds)}s). Clips may span between 3 seconds and ${Math.round(durationSeconds)} seconds.`
+        ? `- This video is short (~${Math.round(durationSeconds)}s). Clips may span between 2 seconds and ${Math.round(durationSeconds)} seconds.`
         : '- Each clip MUST span between 15 seconds and 90 seconds in duration (preferably 20–60 seconds).',
       '- Calculate duration mentally by looking at the start timestamp of start_segment_index and the end timestamp of end_segment_index.',
       durationSeconds && durationSeconds < 15
-        ? `- Do not return clips under 3 seconds or over ${Math.round(durationSeconds)} seconds.`
+        ? `- Do not return clips under 2 seconds or over ${Math.round(durationSeconds)} seconds.`
         : '- Do not return clips under 15 seconds or over 90 seconds.',
       '',
       'CATEGORIES:',

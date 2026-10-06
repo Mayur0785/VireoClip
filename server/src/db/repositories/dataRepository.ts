@@ -12,6 +12,10 @@ export const ownerContext = new AsyncLocalStorage<string>();
 const names = new Set([
   'profiles', 'projects', 'transcripts', 'creator_profiles', 'content_outputs',
   'clip_candidates', 'clips', 'render_jobs', 'reframe_tracks',
+  'social_account_connections', 'oauth_states',
+  'published_posts', 'publish_jobs',
+  'billing_customers', 'subscriptions', 'billing_events', 'billing_invoices',
+  'content_analytics', 'content_memories',
 ]);
 type Result = { data: any; error: { message: string; code?: string } | null; count?: number | null };
 type Action = 'select' | 'insert' | 'update' | 'upsert' | 'delete';
@@ -24,7 +28,7 @@ function normalizeRecord(input: Record<string, any>, owner: string, forInsert: b
     output.created_at ??= now;
   }
   output.updated_at ??= now;
-  for (const key of ['created_at', 'updated_at', 'started_at', 'completed_at']) {
+  for (const key of ['created_at', 'updated_at', 'started_at', 'completed_at', 'locked_at', 'next_retry_at', 'failed_at', 'cancelled_at', 'captured_at', 'synced_at', 'first_seen', 'last_updated']) {
     if (output[key] && !(output[key] instanceof Date)) {
       const date = new Date(output[key]);
       if (Number.isNaN(date.getTime())) throw new AppError('Invalid timestamp.', 400, 'INVALID_TIMESTAMP');

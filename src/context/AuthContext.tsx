@@ -14,11 +14,14 @@ export interface UserProfile {
 export interface CreatorProfileData {
   id?: string;
   user_id: string;
+  brand_name?: string;
   niche: string;
   target_audience: string;
+  brand_description?: string;
   language: string;
   tone: string;
   custom_tone?: string;
+  content_goals?: string;
   website_url?: string;
   newsletter_url?: string;
   podcast_url?: string;

@@ -62,6 +62,8 @@ Thumbs.db
 # Python
 .venv/
 server/python/.venv/
+server/python_embed/
+server/get-pip.py
 __pycache__/
 *.pyc
 # Local artifacts

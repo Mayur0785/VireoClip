@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { backendRequest } from './backendClient';
 import { RenderedClip, ClipAspectRatio } from '../types';
 
 export interface CreateClipResponse {
@@ -28,26 +28,6 @@ export interface SignedUrlResponse {
 }
 
 class ClipRenderService {
-  private getApiUrl(): string {
-    return import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-  }
-
-  private async getAuthHeader(): Promise<HeadersInit> {
-    if (!isSupabaseConfigured) {
-      return { 'Content-Type': 'application/json' };
-    }
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const token = session?.access_token;
-    return {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
-  }
-
   /**
    * Creates a new clip from a selected AI candidate and queues background 9:16 rendering
    */
@@ -56,36 +36,17 @@ class ClipRenderService {
     candidateId: string,
     aspectRatio: ClipAspectRatio = '9:16'
   ): Promise<CreateClipResponse> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/projects/${projectId}/clips`, {
+    return backendRequest<CreateClipResponse>(`/projects/${projectId}/clips`, {
       method: 'POST',
-      headers,
       body: JSON.stringify({ candidateId, aspectRatio }),
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to create clip from candidate.');
-    }
-
-    return (await res.json()) as CreateClipResponse;
   }
 
   /**
    * Fetches all rendered / in-progress clips for a project
    */
   async getProjectClips(projectId: string): Promise<RenderedClip[]> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/projects/${projectId}/clips`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to fetch project clips.');
-    }
-
-    const data = (await res.json()) as GetClipsResponse;
+    const data = await backendRequest<GetClipsResponse>(`/projects/${projectId}/clips`);
     return data.clips || [];
   }
 
@@ -93,17 +54,7 @@ class ClipRenderService {
    * Fetches single clip and its latest render progress
    */
   async getClip(clipId: string): Promise<RenderedClip> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to fetch clip details.');
-    }
-
-    const data = (await res.json()) as GetClipResponse;
+    const data = await backendRequest<GetClipResponse>(`/clips/${clipId}`);
     return data.clip;
   }
 
@@ -111,49 +62,21 @@ class ClipRenderService {
    * Retries rendering for a failed or draft clip
    */
   async renderClip(clipId: string): Promise<void> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/render`, {
-      method: 'POST',
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to start clip rendering.');
-    }
+    await backendRequest<void>(`/clips/${clipId}/render`, { method: 'POST' });
   }
 
   /**
    * Deletes a clip and its rendered file from storage
    */
   async deleteClip(clipId: string): Promise<void> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}`, {
-      method: 'DELETE',
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to delete clip.');
-    }
+    await backendRequest<void>(`/clips/${clipId}`, { method: 'DELETE' });
   }
 
   /**
    * Obtains a signed preview URL for <video> playback
    */
   async getPreviewUrl(clipId: string): Promise<string> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/preview-url`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to get preview URL.');
-    }
-
-    const data = (await res.json()) as SignedUrlResponse;
+    const data = await backendRequest<SignedUrlResponse>(`/clips/${clipId}/preview-url`);
     return data.signedUrl;
   }
 
@@ -161,17 +84,7 @@ class ClipRenderService {
    * Obtains a signed download URL with filename attachment
    */
   async getDownloadUrl(clipId: string): Promise<{ signedUrl: string; filename?: string }> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/download-url`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to get download URL.');
-    }
-
-    const data = (await res.json()) as SignedUrlResponse;
+    const data = await backendRequest<SignedUrlResponse>(`/clips/${clipId}/download-url`);
     return { signedUrl: data.signedUrl, filename: data.filename };
   }
 
@@ -184,22 +97,7 @@ class ClipRenderService {
     availablePresets: string[];
     previewUrl?: string;
   }> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/editor`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to load clip editor data.');
-    }
-
-    return (await res.json()) as {
-      clip: RenderedClip;
-      timingMode: string;
-      availablePresets: string[];
-      previewUrl?: string;
-    };
+    return backendRequest(`/clips/${clipId}/editor`);
   }
 
   /**
@@ -209,19 +107,10 @@ class ClipRenderService {
     clipId: string,
     update: Record<string, any>
   ): Promise<RenderedClip> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/editor`, {
+    const data = await backendRequest<{ clip: RenderedClip }>(`/clips/${clipId}/editor`, {
       method: 'PATCH',
-      headers,
       body: JSON.stringify(update),
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to save editor configuration.');
-    }
-
-    const data = await res.json();
     return data.clip;
   }
 
@@ -229,18 +118,9 @@ class ClipRenderService {
    * Phase 12: Resets editor configuration back to baseline defaults
    */
   async resetClipEditor(clipId: string): Promise<RenderedClip> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/editor/reset`, {
+    const data = await backendRequest<{ clip: RenderedClip }>(`/clips/${clipId}/editor/reset`, {
       method: 'POST',
-      headers,
     });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to reset editor configuration.');
-    }
-
-    const data = await res.json();
     return data.clip;
   }
 
@@ -257,17 +137,7 @@ class ClipRenderService {
       tokens?: Array<{ text: string; start: number; end: number }>;
     }>;
   }> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/captions`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to fetch clip captions.');
-    }
-
-    return await res.json();
+    return backendRequest(`/clips/${clipId}/captions`);
   }
 
   /**
@@ -278,18 +148,7 @@ class ClipRenderService {
     analysis_status: string;
     clipId: string;
   }> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/reframe/analyze`, {
-      method: 'POST',
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to start smart reframe analysis.');
-    }
-
-    return await res.json();
+    return backendRequest(`/clips/${clipId}/reframe/analyze`, { method: 'POST' });
   }
 
   /**
@@ -306,19 +165,8 @@ class ClipRenderService {
     analyzedAspectRatio?: string;
     isStale?: boolean;
   }> {
-    const headers = await this.getAuthHeader();
-    const res = await fetch(`${this.getApiUrl()}/clips/${clipId}/reframe`, {
-      headers,
-    });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.message || 'Failed to fetch smart reframe tracking status.');
-    }
-
-    return await res.json();
+    return backendRequest(`/clips/${clipId}/reframe`);
   }
 }
 
 export const clipRenderService = new ClipRenderService();
-
