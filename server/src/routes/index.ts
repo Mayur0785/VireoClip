@@ -7,6 +7,9 @@ import socialRoutes from './socialRoutes.js';
 import publishingRoutes from './publishingRoutes.js';
 import adminRoutes from './adminRoutes.js';
 import analyticsRoutes from './analyticsRoutes.js';
+import brandBrainRoutes from './brandBrainRoutes.js';
+import contentPackRoutes from './contentPackRoutes.js';
+import hookLabRoutes from './hookLabRoutes.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { getProfiles, saveProfiles, getCreatorProfile, updateCreatorProfile } from '../controllers/profileController.js';
@@ -26,6 +29,9 @@ apiRouter.use('/social', socialRoutes);
 apiRouter.use('/publishing', publishingRoutes);
 apiRouter.use('/analytics', analyticsRoutes);
 apiRouter.use('/admin', adminRoutes);
+apiRouter.use('/brand-brain', brandBrainRoutes);
+apiRouter.use('/content-packs', contentPackRoutes);
+apiRouter.use('/hook-lab', hookLabRoutes);
 
 export default apiRouter;
 

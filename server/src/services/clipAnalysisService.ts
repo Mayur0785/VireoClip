@@ -286,7 +286,7 @@ export class ClipAnalysisService {
         text: String(s.text || ''),
       }));
 
-      // 3. Fetch optional creator profile for persona guidance
+      // 3. Fetch optional creator profile for persona guidance and optional multimodal timeline
       let creatorProfile: CreatorProfileData | null = null;
       try {
         const { data: cpData } = await dataRepository
@@ -301,6 +301,17 @@ export class ClipAnalysisService {
         logger.warn(`Could not load creator profile for clip analysis: ${cpErr.message}`);
       }
 
+      let multimodalTimeline: any = null;
+      try {
+        const { MultimodalTimelineService } = await import('./multimodal/multimodalTimelineService.js');
+        const mmAnalysis = await MultimodalTimelineService.getAnalysis(projectId, userId);
+        if (mmAnalysis?.timeline) {
+          multimodalTimeline = mmAnalysis.timeline;
+        }
+      } catch (mmErr: any) {
+        logger.info(`No prior multimodal timeline for project ${projectId}: ${mmErr.message}`);
+      }
+
       // 4. Construct prompt and call LLM
       logger.info(`Starting AI clip analysis for project ${projectId} (${segments.length} segments)...`);
       const userPrompt = ClipPromptService.buildClipAnalysisPrompt({
@@ -308,6 +319,7 @@ export class ClipAnalysisService {
         durationSeconds: transcript.duration_seconds,
         creatorProfile,
         customNotes: customNotes || project.notes,
+        multimodalTimeline,
       });
 
       const systemPrompt = ClipPromptService.getSystemPrompt();
@@ -351,7 +363,9 @@ export class ClipAnalysisService {
         return [];
       }
 
-      // 6. Ground segment indexes and derive actual timestamps
+      // 6. Ground segment indexes and derive actual timestamps with multimodal scoring
+      const { MultimodalScoringService } = await import('./multimodal/multimodalScoringService.js');
+
       const groundedCandidates: Array<{
         start_segment_index: number;
         end_segment_index: number;
@@ -363,6 +377,7 @@ export class ClipAnalysisService {
         reason: string;
         category: ClipCandidateCategory;
         engagement_score: number;
+        metadata: Record<string, any>;
       }> = [];
 
       for (const ai of aiCandidates) {
@@ -374,9 +389,26 @@ export class ClipAnalysisService {
         const startSeg = segments[ai.start_segment_index];
         const endSeg = segments[ai.end_segment_index];
 
-        const start_seconds = Number(startSeg.start.toFixed(3));
-        const end_seconds = Number(endSeg.end.toFixed(3));
-        const duration_seconds = Number((end_seconds - start_seconds).toFixed(3));
+        const raw_start = Number(startSeg.start.toFixed(3));
+        const raw_end = Number(endSeg.end.toFixed(3));
+
+        // Evaluate multimodal scoring and silence boundary snapping
+        const scored = MultimodalScoringService.scoreCandidate({
+          start_seconds: raw_start,
+          end_seconds: raw_end,
+          title: ai.title,
+          hook: ai.hook,
+          reason: ai.reason,
+          category: ai.category,
+          timeline: multimodalTimeline,
+          baseHookScore: ai.hook_score,
+          baseStandaloneScore: ai.standalone_score,
+          baseInsightScore: ai.insight_score,
+        });
+
+        const start_seconds = scored.start_seconds;
+        const end_seconds = scored.end_seconds;
+        const duration_seconds = scored.duration_seconds;
 
         // Duration constraints: strictly 15s to 90s (adaptive for short test videos under 15s)
         const minDurationLimit = (transcript.duration_seconds && transcript.duration_seconds < 15) ? 2.0 : 15.0;
@@ -385,7 +417,8 @@ export class ClipAnalysisService {
           continue;
         }
 
-        const engagement_score = ClipAnalysisService.computeHybridScore(ai, duration_seconds);
+        // Use hybrid multimodal Vireo Score
+        const engagement_score = scored.vireo_score;
 
         groundedCandidates.push({
           start_segment_index: ai.start_segment_index,
@@ -398,18 +431,38 @@ export class ClipAnalysisService {
           reason: ai.reason,
           category: ai.category,
           engagement_score,
+          metadata: {
+            vireo_score: scored.vireo_score,
+            explanation: scored.explanation,
+            was_snapped: scored.was_snapped,
+          },
         });
       }
 
       // 7. Deduplicate overlapping moments (keep higher scoring one)
-      const deduped = ClipAnalysisService.deduplicateCandidates(groundedCandidates);
+      const deduped = MultimodalScoringService.deduplicateScoredCandidates(
+        groundedCandidates.map((c) => ({ ...c, vireo_score: c.engagement_score })),
+        0.65
+      );
 
       // 8. Cap to max 12 candidates (target 8)
       const topCandidates = deduped.slice(0, 12);
 
       // 9. Replace suggestions in one Mongo transaction, preserving selected clips.
       const allProjectCandidates = await replaceSuggestedCandidates(userId, projectId,
-        topCandidates.map((candidate) => ({ ...candidate, metadata: {} })));
+        topCandidates.map((candidate) => ({
+          start_segment_index: candidate.start_segment_index,
+          end_segment_index: candidate.end_segment_index,
+          start_seconds: candidate.start_seconds,
+          end_seconds: candidate.end_seconds,
+          duration_seconds: candidate.duration_seconds,
+          title: candidate.title,
+          hook: candidate.hook,
+          reason: candidate.reason,
+          category: candidate.category,
+          engagement_score: candidate.engagement_score,
+          metadata: candidate.metadata || {},
+        })));
       return allProjectCandidates as unknown as ClipCandidate[];
     } finally {
       activeClipAnalysisSet.delete(projectId);

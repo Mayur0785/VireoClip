@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/AuthLayout';
 import { GoogleIcon } from '../components/GoogleIcon';
 import { Eye, EyeOff, ArrowRight } from 'lucide-react';
@@ -7,9 +7,15 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
+import { authPathWithReturn, landingReturnPath } from '../lib/landingReturnPath';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const destination = landingReturnPath(
+    location.search,
+    (location.state as { from?: { pathname?: string; search?: string } } | null)?.from,
+  );
   const { signInWithPassword, isConfigured } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,7 +44,7 @@ export const LoginPage: React.FC = () => {
         return;
       }
 
-      navigate('/dashboard');
+      navigate(destination);
     } catch (err) {
       setErrorMessage((err as Error).message || 'An unexpected error occurred.');
       setBusy(false);
@@ -75,7 +81,7 @@ export const LoginPage: React.FC = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin + '/dashboard',
+          redirectTo: window.location.origin + destination,
         },
       });
       if (error) {
@@ -173,7 +179,7 @@ export const LoginPage: React.FC = () => {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Don't have an account?{' '}
-        <Link to="/signup" className="font-semibold text-clay hover:underline">
+        <Link to={authPathWithReturn('/signup', destination)} className="font-semibold text-clay hover:underline">
           Sign up for free
         </Link>
       </p>

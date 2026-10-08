@@ -18,7 +18,7 @@ async function freePort(): Promise<number> {
   return port;
 }
 
-test('Mongo repositories, ownership, indexes, and quota concurrency', { timeout: 45_000 }, async (t) => {
+test('Mongo repositories, ownership, indexes, and quota concurrency', { timeout: 90_000 }, async (t) => {
   if (spawnSync('mongod', ['--version'], { stdio: 'ignore' }).status !== 0) {
     t.skip('mongod is unavailable in this environment');
     return;

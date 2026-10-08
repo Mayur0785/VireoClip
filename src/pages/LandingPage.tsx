@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowDown,
   ArrowRight,
   ArrowUpRight,
   AudioLines,
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import { Logo } from "../components/Logo";
 import {
-  HeroVisual,
   MomentsPreview,
   TranscriptPreview,
   TransformationVisual,
@@ -27,8 +25,10 @@ import {
 import { platformOutputs } from "../data/platforms";
 import { plans } from "../data/marketing";
 import { useLandingMotion } from "../components/landing/useLandingMotion";
+import { LandingHero } from "../components/landing/LandingHero";
 import "./landing.css";
 import "./landing-motion.css";
+import "./landing-foundation.css";
 
 const platformContent = [
   {
@@ -110,44 +110,6 @@ const Cta = ({ className = "" }: { className?: string }) => (
 const Label = ({ children }: { children: React.ReactNode }) => (
   <span className="lv-section-label">{children}</span>
 );
-
-function HeroSection() {
-  return (
-    <section className="lv-hero lv-motion-loop" aria-labelledby="hero-title">
-      <div className="lv-hero-copy">
-        <Label>AI CLIPS &amp; CONTENT REPURPOSING FOR VIDEO CREATORS</Label>
-        <h1 id="hero-title">
-          Turn long videos into
-          <br className="lv-desktop-break" /> ready-to-post <em>clips &amp; content.</em>
-        </h1>
-        <p>
-          Vireo finds the strongest moments in your videos, then helps you turn
-          them into short-form clips and platform-ready content.
-        </p>
-        <div className="lv-hero-actions">
-          <Cta />
-          <a className="lv-secondary-cta" href="#how">
-            See How It Works <ArrowDown size={16} />
-          </a>
-        </div>
-        <div className="lv-hero-proof">
-          <span>
-            <Check size={14} /> Find your best clips with AI
-          </span>
-          <i />
-          <span>
-            <LockKeyhole size={14} /> Private uploads
-          </span>
-          <i />
-          <span>
-            <Copy size={14} /> Ready-to-use drafts
-          </span>
-        </div>
-      </div>
-      <HeroVisual />
-    </section>
-  );
-}
 
 function PlatformStrip() {
   return (
@@ -662,7 +624,7 @@ export function LandingPage() {
   useLandingMotion(pageRef);
   return (
     <main className="lv-page" ref={pageRef}>
-      <HeroSection />
+      <LandingHero />
       <section className="lv-transformation lv-container">
         <div className="lv-transformation-heading lv-reveal">
           <Label>THE TRANSFORMATION</Label>

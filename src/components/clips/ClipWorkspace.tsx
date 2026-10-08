@@ -18,13 +18,20 @@ import {
   Sliders,
   Share2,
   Trash2,
+  Search,
+  Zap,
+  Activity,
+  X,
+  Wand2,
+  Layers,
 } from 'lucide-react';
 import { Button } from '../Button';
 import { SpotlightCard } from '../react-bits/SpotlightCard';
-import { ClipCandidate, ClipCandidateStatus, Transcript, RenderedClip } from '../../types';
+import { ClipCandidate, ClipCandidateStatus, Transcript, RenderedClip, MomentSearchResult } from '../../types';
 import { clipService } from '../../services/clipService';
 import { clipRenderService } from '../../services/clipRenderService';
 import { PublishModal } from '../PublishModal';
+import { ContentPackWorkspace } from '../contentPack/ContentPackWorkspace';
 
 export interface ClipWorkspaceProps {
   projectId: string;
@@ -50,6 +57,12 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
 
+  // Phase 16: Multimodal Moment Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchMoments, setSearchMoments] = useState<MomentSearchResult[]>([]);
+
   // Rendered Clips state
   const [myClips, setMyClips] = useState<RenderedClip[]>([]);
   const [isCreatingClip, setIsCreatingClip] = useState<string | null>(null); // candidateId currently creating
@@ -59,8 +72,41 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
   const [retryingClipId, setRetryingClipId] = useState<string | null>(null);
   const [publishingClip, setPublishingClip] = useState<RenderedClip | null>(null);
+  const [contentPackClip, setContentPackClip] = useState<RenderedClip | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const handleSearchMoments = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim() || isSearching) return;
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const results = await clipService.findMoments(projectId, searchQuery.trim());
+      setSearchMoments(results);
+      if (results.length === 0) {
+        setSearchError('No matching moments found for that query. Try broader keywords.');
+      }
+    } catch (err: any) {
+      setSearchError(err.message || 'Failed to search video moments.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchMoments([]);
+    setSearchError(null);
+  };
+
+  const handlePreviewMoment = (moment: MomentSearchResult) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = moment.start_seconds;
+      videoRef.current.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  };
 
   // Load existing clip candidates and rendered clips on mount
   const refreshClipsData = async () => {
@@ -455,6 +501,103 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
             </SpotlightCard>
           ) : (
             <div className="space-y-4">
+              {/* Natural Language Moment Search Bar */}
+              <div className="rounded-2xl border border-border/70 bg-card p-3 shadow-xs">
+                <form onSubmit={handleSearchMoments} className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="size-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Ask Vireo to find a moment... (e.g. 'find the part about workspace' or 'hook about AI')"
+                      className="w-full bg-cream/50 border border-border/80 rounded-xl pl-9 pr-8 py-2 text-xs text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-1 focus:ring-clay/30"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    variant="clay"
+                    size="sm"
+                    disabled={isSearching || !searchQuery.trim()}
+                    className="text-xs shrink-0"
+                  >
+                    {isSearching ? (
+                      <>
+                        <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="size-3.5 mr-1.5" />
+                        Find Moment
+                      </>
+                    )}
+                  </Button>
+                </form>
+
+                {searchError && (
+                  <p className="text-[11px] text-destructive mt-2 px-1 flex items-center gap-1.5">
+                    <AlertCircle className="size-3 shrink-0" />
+                    <span>{searchError}</span>
+                  </p>
+                )}
+
+                {/* Found Moments List */}
+                {searchMoments.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-border/60 space-y-2">
+                    <div className="flex items-center justify-between text-xs px-1">
+                      <span className="font-semibold text-foreground flex items-center gap-1.5 font-mono">
+                        <Sparkles className="size-3.5 text-clay" />
+                        Found {searchMoments.length} Moment{searchMoments.length > 1 ? 's' : ''} for "{searchQuery}"
+                      </span>
+                      <button
+                        onClick={handleClearSearch}
+                        className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {searchMoments.map((moment, mIdx) => (
+                        <div
+                          key={mIdx}
+                          onClick={() => handlePreviewMoment(moment)}
+                          className="rounded-xl border border-clay/30 bg-cream/40 p-2.5 cursor-pointer hover:bg-cream/70 transition-all text-left flex flex-col justify-between"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-foreground line-clamp-1">{moment.title}</span>
+                              <span className="rounded bg-clay/10 px-1.5 py-0.2 font-mono text-clay font-bold text-[10px]">
+                                {moment.vireo_score} Score
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 mt-1 italic">
+                              "{moment.hook}"
+                            </p>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground font-mono border-t border-border/40 pt-1.5">
+                            <span>{formatTime(moment.start_seconds)} – {formatTime(moment.end_seconds)}</span>
+                            <span className="text-clay font-semibold flex items-center gap-1">
+                              <Play className="size-2.5 fill-clay" /> Preview
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Filter Sub-bar */}
               <div className="flex items-center justify-between text-xs pb-1">
                 <div className="flex items-center gap-2 font-medium">
@@ -485,6 +628,9 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                   {filteredCandidates.map((candidate, index) => {
                     const isSelected = candidate.id === activeCandidate?.id;
                     const isChosen = candidate.status === 'selected';
+                    const score = candidate.metadata?.vireo_score ?? candidate.engagement_score;
+                    const visualScore = candidate.metadata?.explanation?.visual_activity_score;
+                    const wasSnapped = candidate.metadata?.was_snapped;
 
                     return (
                       <div
@@ -501,8 +647,14 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                             <span className="font-mono text-xs font-semibold text-muted-foreground">
                               #{index + 1}
                             </span>
-                            <span className="rounded-md bg-clay/10 px-2 py-0.5 text-xs font-bold text-clay font-mono">
-                              {candidate.engagement_score} Score
+                            <span
+                              className={`rounded-md px-2 py-0.5 text-xs font-bold font-mono ${
+                                score >= 85
+                                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                  : 'bg-clay/10 text-clay'
+                              }`}
+                            >
+                              {score} Vireo
                             </span>
                           </div>
 
@@ -522,7 +674,23 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                           {candidate.title}
                         </h4>
 
-                        <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground font-mono border-t border-border/50 pt-2.5">
+                        {/* Multimodal Signal Badges */}
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {visualScore && (
+                            <span className="inline-flex items-center gap-1 rounded bg-cream/70 border border-border/50 px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
+                              <Activity className="size-2.5 text-clay" />
+                              {visualScore} Visual
+                            </span>
+                          )}
+                          {wasSnapped && (
+                            <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                              <Zap className="size-2.5" />
+                              Snapped
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-2.5 flex items-center justify-between text-xs text-muted-foreground font-mono border-t border-border/50 pt-2">
                           <span className="flex items-center gap-1">
                             <Clock className="size-3" />
                             {formatTime(candidate.start_seconds)} – {formatTime(candidate.end_seconds)}
@@ -589,7 +757,7 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                   )}
                 </div>
 
-                {/* RIGHT: Candidate Actions & Phase 11 "Create Clip" */}
+                {/* RIGHT: Candidate Actions & Phase 16 Explainable Intelligence */}
                 {activeCandidate && (
                   <div className="lg:col-span-3 space-y-4">
                     <div className="card-soft p-5 border-border/80 bg-card space-y-4">
@@ -597,8 +765,14 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                         <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground font-mono">
                           MOMENT DETAILS
                         </span>
-                        <span className="rounded-md bg-clay/10 px-2.5 py-0.5 text-xs font-bold text-clay font-mono">
-                          {activeCandidate.engagement_score} Score
+                        <span
+                          className={`rounded-md px-2.5 py-0.5 text-xs font-bold font-mono ${
+                            (activeCandidate.metadata?.vireo_score ?? activeCandidate.engagement_score) >= 85
+                              ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                              : 'bg-clay/10 text-clay'
+                          }`}
+                        >
+                          {activeCandidate.metadata?.vireo_score ?? activeCandidate.engagement_score} Score
                         </span>
                       </div>
 
@@ -616,7 +790,46 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                         </p>
                       </div>
 
-                      {activeCandidate.reason && (
+                      {/* Phase 16 Explainable Multimodal Signals */}
+                      {activeCandidate.metadata?.explanation && (
+                        <div className="space-y-2 rounded-xl bg-cream/30 border border-border/60 p-3 text-xs">
+                          <span className="font-semibold text-foreground text-[11px] font-mono uppercase tracking-wider block">
+                            Multimodal Intelligence
+                          </span>
+                          <div className="grid grid-cols-3 gap-1 text-[10px] font-mono">
+                            <div className="rounded bg-card p-1.5 text-center border border-border/40">
+                              <span className="text-muted-foreground block text-[9px]">Hook</span>
+                              <span className="font-bold text-foreground">{activeCandidate.metadata.explanation.hook_score}</span>
+                            </div>
+                            <div className="rounded bg-card p-1.5 text-center border border-border/40">
+                              <span className="text-muted-foreground block text-[9px]">Visual</span>
+                              <span className="font-bold text-foreground">{activeCandidate.metadata.explanation.visual_activity_score}</span>
+                            </div>
+                            <div className="rounded bg-card p-1.5 text-center border border-border/40">
+                              <span className="text-muted-foreground block text-[9px]">Audio</span>
+                              <span className="font-bold text-foreground">{activeCandidate.metadata.explanation.audio_energy_score}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Why it works / Reasons breakdown */}
+                      {activeCandidate.metadata?.explanation?.reasons?.length ? (
+                        <div className="space-y-1.5 text-xs">
+                          <span className="font-semibold text-foreground flex items-center gap-1.5">
+                            <Lightbulb className="size-3.5 text-sage" />
+                            Why it works
+                          </span>
+                          <ul className="space-y-1">
+                            {activeCandidate.metadata.explanation.reasons.map((r: string, rIdx: number) => (
+                              <li key={rIdx} className="text-muted-foreground text-[11px] leading-relaxed flex items-start gap-1.5">
+                                <span className="text-clay font-bold">•</span>
+                                <span>{r}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : activeCandidate.reason ? (
                         <div className="space-y-1 text-xs">
                           <span className="font-semibold text-foreground flex items-center gap-1.5">
                             <Lightbulb className="size-3.5 text-sage" />
@@ -625,6 +838,28 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                           <p className="text-muted-foreground text-[11px] leading-relaxed">
                             {activeCandidate.reason}
                           </p>
+                        </div>
+                      ) : null}
+
+                      {/* Platform Suitability */}
+                      {activeCandidate.metadata?.explanation?.platform_suitability && (
+                        <div className="space-y-1.5 text-xs border-t border-border/50 pt-2.5">
+                          <span className="font-semibold text-foreground text-[11px] uppercase tracking-wider font-mono block">
+                            Platform Suitability
+                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {Object.entries(activeCandidate.metadata.explanation.platform_suitability).map(([plat, detail]: any) => (
+                              <span
+                                key={plat}
+                                title={detail.reason}
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-mono uppercase font-semibold ${
+                                  detail.suitable ? 'bg-vireo-green/10 text-vireo-green' : 'bg-muted text-muted-foreground line-through'
+                                }`}
+                              >
+                                {plat}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -825,6 +1060,17 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                       <div className="flex items-center gap-2">
                         {isReady && (
                           <>
+                            <Link to={`/clips/${clip.id}/edit?tab=producer`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs font-semibold border-purple-500/60 bg-purple-500/10 text-purple-400 hover:bg-purple-600 hover:text-white shadow-xs transition-colors"
+                                title="Open Vireo Producer AI Director (auto dead air cuts, kinetic captions, punch-ins)"
+                              >
+                                <Wand2 className="size-3.5 mr-1.5" />
+                                Produce
+                              </Button>
+                            </Link>
                             <Link to={`/clips/${clip.id}/edit`}>
                               <Button
                                 variant="outline"
@@ -836,6 +1082,16 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                                 Edit Video
                               </Button>
                             </Link>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs font-semibold border-purple-500/60 bg-purple-500/10 text-purple-400 hover:bg-purple-600 hover:text-white shadow-xs transition-colors"
+                              title="Generate or view multi-platform Content Pack (titles, hooks, captions, descriptions, CTAs, thumbnails)"
+                              onClick={() => setContentPackClip(clip)}
+                            >
+                              <Layers className="size-3.5 mr-1.5" />
+                              Content Pack
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -917,6 +1173,21 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
           initialTitle={`Clip: ${Math.round(publishingClip.duration_seconds)}s Highlight`}
           initialCaption="Check out this highlight clip generated with VireoClip! #ai #video #shorts"
         />
+      )}
+
+      {/* Phase 23: Content Pack Workspace Modal */}
+      {contentPackClip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-5xl">
+            <ContentPackWorkspace
+              projectId={projectId}
+              clipId={contentPackClip.id}
+              clipTitle={contentPackClip.title || `Clip: ${Math.round(contentPackClip.duration_seconds)}s Highlight`}
+              clipDurationSeconds={contentPackClip.duration_seconds}
+              onClose={() => setContentPackClip(null)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

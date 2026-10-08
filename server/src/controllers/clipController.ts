@@ -6,6 +6,8 @@ import { ClipAnalysisService, activeClipAnalysisSet } from '../services/clipAnal
 import { ClipRenderService, isClipRenderActive } from '../services/clipRenderService.js';
 import { CaptionService } from '../services/captionService.js';
 import { SmartReframeService, activeReframeAnalysisSet } from '../services/smartReframeService.js';
+import { ProducerPlanningService } from '../services/producerPlanningService.js';
+import { ProducerRenderService } from '../services/producerRenderService.js';
 
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
@@ -943,3 +945,239 @@ export const getClipReframe = async (req: AuthenticatedRequest, res: Response): 
     });
   }
 };
+
+// ── Phase 17: Vireo Producer Endpoints ────────────────────────────
+
+/**
+ * POST /api/clips/:clipId/producer/plan
+ * Generates an automated ProducerEditPlan for the clip
+ */
+export const generateClipProducerPlan = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const clipId = req.params.clipId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!clipId || !isValidUUID(clipId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid clip UUID is required.' });
+    return;
+  }
+
+  try {
+    const plan = await ProducerPlanningService.generatePlan(clipId, userId, req.body || {});
+    res.status(200).json({ status: 'ok', data: plan });
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    res.status(status).json({
+      status: 'error',
+      code: err.code || 'INTERNAL_ERROR',
+      message: err.message || 'Failed to generate producer plan.',
+    });
+  }
+};
+
+/**
+ * GET /api/clips/:clipId/producer/plans
+ * Lists all generated Producer plans for this clip
+ */
+export const getClipProducerPlans = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const clipId = req.params.clipId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!clipId || !isValidUUID(clipId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid clip UUID is required.' });
+    return;
+  }
+
+  try {
+    const { data: plans, error } = await dataRepository
+      .from('producer_plans')
+      .select('*')
+      .eq('clip_id', clipId)
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      res.status(500).json({ status: 'error', message: error.message });
+      return;
+    }
+
+    res.status(200).json({ status: 'ok', data: plans || [] });
+  } catch (err: any) {
+    res.status(500).json({ status: 'error', message: err.message || 'Failed to fetch producer plans.' });
+  }
+};
+
+/**
+ * GET /api/clips/:clipId/producer/plans/:planId
+ * Retrieves a single ProducerEditPlan
+ */
+export const getClipProducerPlan = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const planId = req.params.planId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!planId || !isValidUUID(planId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid plan UUID is required.' });
+    return;
+  }
+
+  try {
+    const { data: plan, error } = await dataRepository
+      .from('producer_plans')
+      .select('*')
+      .eq('id', planId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (error || !plan) {
+      res.status(404).json({ status: 'error', code: 'PLAN_NOT_FOUND', message: 'Producer plan not found.' });
+      return;
+    }
+
+    res.status(200).json({ status: 'ok', data: plan });
+  } catch (err: any) {
+    res.status(500).json({ status: 'error', message: err.message || 'Failed to fetch plan.' });
+  }
+};
+
+/**
+ * POST /api/clips/:clipId/producer/plans/:planId/revise
+ * Revises a plan through natural-language instruction or operation toggles
+ */
+export const reviseClipProducerPlan = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const planId = req.params.planId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!planId || !isValidUUID(planId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid plan UUID is required.' });
+    return;
+  }
+
+  try {
+    const revisedPlan = await ProducerPlanningService.revisePlan(planId, userId, req.body || {});
+    res.status(200).json({ status: 'ok', data: revisedPlan });
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    res.status(status).json({
+      status: 'error',
+      code: err.code || 'INTERNAL_ERROR',
+      message: err.message || 'Failed to revise producer plan.',
+    });
+  }
+};
+
+/**
+ * POST /api/clips/:clipId/producer/plans/:planId/preview
+ * Renders a lightweight 720p preview video executing the plan's edits
+ */
+export const previewClipProducerPlan = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const planId = req.params.planId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!planId || !isValidUUID(planId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid plan UUID is required.' });
+    return;
+  }
+
+  try {
+    const previewResult = await ProducerRenderService.generatePreview(planId, userId);
+    res.status(200).json({ status: 'ok', data: previewResult });
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    res.status(status).json({
+      status: 'error',
+      code: err.code || 'PREVIEW_FAILED',
+      message: err.message || 'Failed to generate preview render.',
+    });
+  }
+};
+
+/**
+ * POST /api/clips/:clipId/producer/plans/:planId/apply
+ * Applies the approved Producer plan to the clip non-destructively and starts render
+ */
+export const applyClipProducerPlan = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const planId = req.params.planId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!planId || !isValidUUID(planId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid plan UUID is required.' });
+    return;
+  }
+
+  try {
+    const result = await ProducerRenderService.applyPlanToClip(planId, userId);
+    res.status(200).json({
+      status: 'ok',
+      message: 'Producer plan successfully applied to clip.',
+      data: result,
+    });
+  } catch (err: any) {
+    const status = err.statusCode || 500;
+    res.status(status).json({
+      status: 'error',
+      code: err.code || 'APPLY_FAILED',
+      message: err.message || 'Failed to apply producer plan to clip.',
+    });
+  }
+};
+
+/**
+ * DELETE /api/clips/:clipId/producer/plans/:planId
+ * Deletes a producer plan
+ */
+export const deleteClipProducerPlan = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const userId = req.user?.id;
+  const planId = req.params.planId;
+
+  if (!userId) {
+    res.status(401).json({ status: 'error', code: 'AUTH_REQUIRED', message: 'User not authenticated.' });
+    return;
+  }
+
+  if (!planId || !isValidUUID(planId)) {
+    res.status(400).json({ status: 'error', code: 'INVALID_UUID', message: 'Valid plan UUID is required.' });
+    return;
+  }
+
+  try {
+    await dataRepository
+      .from('producer_plans')
+      .delete()
+      .eq('id', planId)
+      .eq('user_id', userId);
+
+    res.status(200).json({ status: 'ok', message: 'Plan deleted successfully.' });
+  } catch (err: any) {
+    res.status(500).json({ status: 'error', message: err.message || 'Failed to delete plan.' });
+  }
+};
+

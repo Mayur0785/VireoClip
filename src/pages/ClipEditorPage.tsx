@@ -22,9 +22,30 @@ import {
   AlignRight,
   ListOrdered,
   Layers,
+  Wand2,
+  SlidersHorizontal,
+  Undo2,
+  Redo2,
+  Command,
+  Globe,
+  Brain,
+  Flame,
 } from 'lucide-react';
+import { ProducerPanel } from '../components/producer/ProducerPanel';
+import { TranslationWorkspace } from '../components/translation/TranslationWorkspace';
+import { ContentPackWorkspace } from '../components/contentPack/ContentPackWorkspace';
+import { HookLabWorkspace } from '../components/hookLab/HookLabWorkspace';
 import { clipRenderService } from '../services/clipRenderService';
+import { Timeline } from '../components/editor/Timeline';
+import { EditorCanvas } from '../components/editor/EditorCanvas';
+import { InspectorPanel } from '../components/editor/InspectorPanel';
+import { MediaBin } from '../components/editor/MediaBin';
+import { CommandPalette } from '../components/editor/CommandPalette';
+import { proEditorService } from '../services/proEditorService';
+import { brandBrainService } from '../services/brandBrainService';
 import {
+  EditorProject,
+  EditorTrackItem,
   RenderedClip,
   ClipAspectRatio,
   CaptionStyle,
@@ -240,7 +261,258 @@ export const ClipEditorPage: React.FC = () => {
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio'>('captions');
+  const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio' | 'producer' | 'translate' | 'content_pack' | 'hook_lab'>('captions');
+
+  // Check URL query for default tab
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'producer') {
+      setActiveTab('producer');
+    } else if (params.get('tab') === 'content_pack' || params.get('tab') === 'pack') {
+      setActiveTab('content_pack');
+    } else if (params.get('tab') === 'hook_lab' || params.get('tab') === 'hook-lab' || params.get('tab') === 'hook') {
+      setActiveTab('hook_lab');
+    }
+  }, []);
+
+  // Phase 18: Pro Video Editor State
+  const [editorMode, setEditorMode] = useState<'beginner' | 'pro'>(() => {
+    return (localStorage.getItem('vireo_editor_mode') as 'beginner' | 'pro') || 'beginner';
+  });
+  const [editorProject, setEditorProject] = useState<EditorProject | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [previewQuality, setPreviewQuality] = useState<'auto' | '360p' | '540p' | '720p'>('auto');
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+
+  // History stack for Undo / Redo
+  const [historyStack, setHistoryStack] = useState<EditorProject[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const [isApplyingBrand, setIsApplyingBrand] = useState<boolean>(false);
+
+  const toggleEditorMode = (mode: 'beginner' | 'pro') => {
+    setEditorMode(mode);
+    localStorage.setItem('vireo_editor_mode', mode);
+  };
+
+  const loadEditorProject = useCallback(async () => {
+    if (!clipId) return;
+    try {
+      const proj = await proEditorService.getOrCreateEditorProject(clipId, {
+        aspect_ratio: aspectRatio,
+      });
+      setEditorProject(proj);
+      setHistoryStack([proj]);
+      setHistoryIndex(0);
+    } catch (err: any) {
+      console.error('Failed to load pro editor project:', err);
+    }
+  }, [clipId, aspectRatio]);
+
+  useEffect(() => {
+    if (editorMode === 'pro' && !editorProject) {
+      loadEditorProject();
+    }
+  }, [editorMode, editorProject, loadEditorProject]);
+
+  // Push new state into undo/redo history
+  const pushHistory = useCallback((newProject: EditorProject) => {
+    setHistoryStack((prev) => {
+      const trimmed = prev.slice(0, historyIndex + 1);
+      return [...trimmed, newProject];
+    });
+    setHistoryIndex((prev) => prev + 1);
+    setEditorProject(newProject);
+  }, [historyIndex]);
+
+  // Undo / Redo
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      const nextIdx = historyIndex - 1;
+      setHistoryIndex(nextIdx);
+      setEditorProject(historyStack[nextIdx]);
+    }
+  }, [historyIndex, historyStack]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < historyStack.length - 1) {
+      const nextIdx = historyIndex + 1;
+      setHistoryIndex(nextIdx);
+      setEditorProject(historyStack[nextIdx]);
+    }
+  }, [historyIndex, historyStack]);
+
+  const handleApplyBrand = useCallback(async () => {
+    if (!editorProject) return;
+    try {
+      setIsApplyingBrand(true);
+      setError(null);
+      const res = await brandBrainService.applyToEditor(editorProject.id);
+      if (res?.updatedProject) {
+        pushHistory(res.updatedProject);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to apply brand style.');
+    } finally {
+      setIsApplyingBrand(false);
+    }
+  }, [editorProject, pushHistory]);
+
+  // Debounced autosave
+  useEffect(() => {
+    if (!editorProject || editorMode !== 'pro') return;
+    setAutosaveStatus('saving');
+    const timer = setTimeout(async () => {
+      try {
+        await proEditorService.updateEditorProject(editorProject.id, {
+          canvas: editorProject.canvas,
+          tracks: editorProject.tracks,
+          playhead: currentTime,
+          settings: editorProject.settings,
+          title: editorProject.title,
+        });
+        setAutosaveStatus('saved');
+      } catch (err) {
+        setAutosaveStatus('error');
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [editorProject, editorMode, currentTime]);
+
+  // Pro Editor Operations: Split, Ripple Delete, Duplicate, Freeze Frame, Snapshot
+  const handleSplit = useCallback(async () => {
+    if (!editorProject || !selectedItemId || !selectedTrackId) return;
+    try {
+      const updated = await proEditorService.splitItem(editorProject.id, {
+        track_id: selectedTrackId,
+        item_id: selectedItemId,
+        split_time: currentTime,
+      });
+      pushHistory(updated);
+    } catch (err: any) {
+      console.error('Split failed:', err);
+    }
+  }, [editorProject, selectedItemId, selectedTrackId, currentTime, pushHistory]);
+
+  const handleRippleDelete = useCallback(async () => {
+    if (!editorProject || !selectedItemId || !selectedTrackId) return;
+    try {
+      const updated = await proEditorService.rippleDelete(editorProject.id, {
+        track_id: selectedTrackId,
+        item_id: selectedItemId,
+      });
+      setSelectedItemId(null);
+      pushHistory(updated);
+    } catch (err: any) {
+      console.error('Ripple delete failed:', err);
+    }
+  }, [editorProject, selectedItemId, selectedTrackId, pushHistory]);
+
+  const handleDuplicate = useCallback(async () => {
+    if (!editorProject || !selectedItemId || !selectedTrackId) return;
+    try {
+      const updated = await proEditorService.duplicateItem(editorProject.id, {
+        track_id: selectedTrackId,
+        item_id: selectedItemId,
+      });
+      pushHistory(updated);
+    } catch (err: any) {
+      console.error('Duplicate failed:', err);
+    }
+  }, [editorProject, selectedItemId, selectedTrackId, pushHistory]);
+
+  const handleFreezeFrame = useCallback(async () => {
+    if (!editorProject || !selectedItemId || !selectedTrackId) return;
+    try {
+      const updated = await proEditorService.freezeFrame(editorProject.id, {
+        track_id: selectedTrackId,
+        item_id: selectedItemId,
+        freeze_time: currentTime,
+        duration: 3.0,
+      });
+      pushHistory(updated);
+    } catch (err: any) {
+      console.error('Freeze frame failed:', err);
+    }
+  }, [editorProject, selectedItemId, selectedTrackId, currentTime, pushHistory]);
+
+  const handleSnapshot = useCallback(async () => {
+    if (!editorProject || !selectedItemId || !selectedTrackId) return;
+    try {
+      const url = await proEditorService.captureSnapshot(
+        editorProject.id,
+        selectedTrackId,
+        selectedItemId,
+        currentTime
+      );
+      window.open(url, '_blank');
+    } catch (err: any) {
+      console.error('Snapshot failed:', err);
+    }
+  }, [editorProject, selectedItemId, selectedTrackId, currentTime]);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA' ||
+        document.activeElement?.tagName === 'SELECT'
+      ) {
+        return;
+      }
+
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (videoRef.current) {
+          if (videoRef.current.paused) {
+            videoRef.current.play().catch(() => {});
+            setIsPlaying(true);
+          } else {
+            videoRef.current.pause();
+            setIsPlaying(false);
+          }
+        }
+      } else if (e.key === 's' || e.key === 'S') {
+        if (editorMode === 'pro' && selectedItemId) {
+          e.preventDefault();
+          handleSplit();
+        }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (editorMode === 'pro' && selectedItemId) {
+          e.preventDefault();
+          handleRippleDelete();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      } else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        handleUndo();
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        handleRedo();
+      } else if ((e.metaKey || e.ctrlKey) && (e.key === 'd' || e.key === 'D')) {
+        if (editorMode === 'pro' && selectedItemId) {
+          e.preventDefault();
+          handleDuplicate();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    editorMode,
+    selectedItemId,
+    currentTime,
+    handleSplit,
+    handleRippleDelete,
+    handleDuplicate,
+    handleUndo,
+    handleRedo,
+  ]);
 
   // Load editor data on mount
   const loadData = useCallback(async () => {
@@ -767,23 +1039,123 @@ export const ClipEditorPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Mode Switcher */}
+        <div className="flex items-center bg-neutral-950 p-1 rounded-lg border border-neutral-800">
           <button
-            onClick={handleReset}
-            disabled={isRendering || isSaving}
-            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 hover:text-white bg-neutral-800/60 hover:bg-neutral-800 rounded-lg transition border border-neutral-700"
+            type="button"
+            onClick={() => toggleEditorMode('beginner')}
+            className={`px-3 py-1 rounded text-xs font-semibold transition ${
+              editorMode === 'beginner'
+                ? 'bg-neutral-800 text-white shadow'
+                : 'text-neutral-400 hover:text-white'
+            }`}
           >
-            <RotateCcw className="w-3.5 h-3.5" />
-            Reset
+            Beginner Mode
           </button>
+          <button
+            type="button"
+            onClick={() => toggleEditorMode('pro')}
+            className={`px-3 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition ${
+              editorMode === 'pro'
+                ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow'
+                : 'text-neutral-400 hover:text-white'
+            }`}
+          >
+            <SlidersHorizontal className="w-3 h-3" />
+            <span>Pro Multi-Track</span>
+          </button>
+        </div>
 
-          <button
-            onClick={() => handleSave()}
-            disabled={isSaving || isRendering || !isDirty}
-            className="px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-lg transition border border-neutral-700 disabled:opacity-50"
-          >
-            {isSaving ? 'Saving...' : 'Save Edits'}
-          </button>
+        <div className="flex items-center gap-2">
+          {/* Pro Mode Controls: Autosave status, Undo, Redo, Command Palette */}
+          {editorMode === 'pro' && (
+            <>
+              {/* Autosave Status Badge */}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-neutral-950 border border-neutral-800 text-[11px] font-mono">
+                {autosaveStatus === 'saving' && (
+                  <>
+                    <div className="w-2 h-2 rounded-full border border-orange-400 border-t-transparent animate-spin" />
+                    <span className="text-orange-400">Saving...</span>
+                  </>
+                )}
+                {autosaveStatus === 'saved' && (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span className="text-emerald-400">Saved</span>
+                  </>
+                )}
+                {autosaveStatus === 'error' && (
+                  <>
+                    <div className="w-2 h-2 rounded-full bg-red-400" />
+                    <span className="text-red-400">Save failed</span>
+                  </>
+                )}
+              </div>
+
+              {/* Undo / Redo */}
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={historyIndex <= 0}
+                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40 text-neutral-300 hover:text-white transition"
+                title="Undo (⌘Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleRedo}
+                disabled={historyIndex >= historyStack.length - 1}
+                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40 text-neutral-300 hover:text-white transition"
+                title="Redo (⌘⇧Z)"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Command Palette Button */}
+              <button
+                type="button"
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="p-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white transition"
+                title="Command Palette (⌘K)"
+              >
+                <Command className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Apply Brand Style */}
+              <button
+                type="button"
+                onClick={handleApplyBrand}
+                disabled={isApplyingBrand || !editorProject}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/60 text-emerald-300 hover:text-emerald-100 text-[11px] font-semibold transition disabled:opacity-50"
+                title="Apply Brand Style (Colors, Fonts, Watermark & Captions)"
+              >
+                <Brain className="w-3.5 h-3.5" />
+                <span>{isApplyingBrand ? 'Applying...' : 'Apply Brand'}</span>
+              </button>
+            </>
+          )}
+
+          {editorMode === 'beginner' && (
+            <>
+              <button
+                onClick={handleReset}
+                disabled={isRendering || isSaving}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-neutral-400 hover:text-white bg-neutral-800/60 hover:bg-neutral-800 rounded-lg transition border border-neutral-700"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset
+              </button>
+
+              <button
+                onClick={() => handleSave()}
+                disabled={isSaving || isRendering || !isDirty}
+                className="px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white bg-neutral-800 hover:bg-neutral-700 rounded-lg transition border border-neutral-700 disabled:opacity-50"
+              >
+                {isSaving ? 'Saving...' : 'Save Edits'}
+              </button>
+            </>
+          )}
 
           <button
             onClick={handleRenderChanges}
@@ -816,7 +1188,149 @@ export const ClipEditorPage: React.FC = () => {
       </header>
 
       {/* Main Workspace Layout */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+      {editorMode === 'pro' && editorProject ? (
+        <div className="flex-1 flex flex-col overflow-hidden bg-neutral-950">
+          {/* WORKSPACE TOP: MEDIA BIN (LEFT) + CANVAS (CENTER) + INSPECTOR (RIGHT) */}
+          <div className="flex-1 flex overflow-hidden">
+            <MediaBin
+              project={editorProject}
+              sourceVideoUrl={previewUrl}
+              onAddMediaToTimeline={(type, _name, url, dur) => {
+                const targetTrack =
+                  editorProject.tracks.find((t) => t.type === type) || editorProject.tracks[0];
+                if (!targetTrack) return;
+                const newItem: EditorTrackItem = {
+                  id: crypto.randomUUID(),
+                  track_id: targetTrack.id,
+                  type,
+                  source_path: url || previewUrl || null,
+                  timeline_start: currentTime,
+                  timeline_end: currentTime + (dur || 5),
+                  source_start: 0,
+                  source_end: dur || 5,
+                  transform: { position_x: 0, position_y: 0, scale: 1, rotation: 0, opacity: 1 },
+                  speed: { speed: 1.0, pitch_preserved: true },
+                  effects: [],
+                  keyframes: [],
+                  locked: false,
+                  muted: false,
+                  hidden: false,
+                  z_index: 0,
+                  text:
+                    type === 'TEXT'
+                      ? {
+                          text: 'New Text Layer',
+                          font_family: 'Inter',
+                          font_size: 48,
+                          font_weight: 'bold',
+                          italic: false,
+                          alignment: 'center',
+                          color: '#FFFFFF',
+                        }
+                      : undefined,
+                };
+                const updatedTracks = editorProject.tracks.map((t) =>
+                  t.id === targetTrack.id ? { ...t, items: [...t.items, newItem] } : t
+                );
+                pushHistory({ ...editorProject, tracks: updatedTracks });
+                setSelectedItemId(newItem.id);
+                setSelectedTrackId(targetTrack.id);
+              }}
+            />
+
+            <EditorCanvas
+              project={editorProject}
+              playhead={currentTime}
+              isPlaying={isPlaying}
+              videoSrc={previewUrl}
+              onPlayheadChange={(time) => {
+                setCurrentTime(time);
+                if (videoRef.current) videoRef.current.currentTime = time;
+              }}
+              onTogglePlay={togglePlay}
+              selectedItemId={selectedItemId}
+              onUpdateItemTransform={(itemId, transform) => {
+                const updatedTracks = editorProject.tracks.map((t) => ({
+                  ...t,
+                  items: t.items.map((i) => (i.id === itemId ? { ...i, transform } : i)),
+                }));
+                const updated = { ...editorProject, tracks: updatedTracks };
+                pushHistory(updated);
+              }}
+              previewQuality={previewQuality}
+              onChangePreviewQuality={setPreviewQuality}
+              onTakeSnapshot={handleSnapshot}
+            />
+
+            <InspectorPanel
+              project={editorProject}
+              selectedItemId={selectedItemId}
+              selectedTrackId={selectedTrackId}
+              playhead={currentTime}
+              onUpdateProject={(updated) => pushHistory(updated)}
+              onUpdateItem={(itemId, updates) => {
+                const updatedTracks = editorProject.tracks.map((t) => ({
+                  ...t,
+                  items: t.items.map((i) => (i.id === itemId ? { ...i, ...updates } : i)),
+                }));
+                pushHistory({ ...editorProject, tracks: updatedTracks });
+              }}
+              onAddKeyframe={(itemId, property, value, easing, time) => {
+                const updatedTracks = editorProject.tracks.map((t) => ({
+                  ...t,
+                  items: t.items.map((i) => {
+                    if (i.id !== itemId) return i;
+                    const relTime = time !== undefined ? time : Math.max(0, currentTime - i.timeline_start);
+                    const newKf = {
+                      id: crypto.randomUUID(),
+                      time: relTime,
+                      property,
+                      value,
+                      easing,
+                    };
+                    return { ...i, keyframes: [...(i.keyframes || []), newKf] };
+                  }),
+                }));
+                pushHistory({ ...editorProject, tracks: updatedTracks });
+              }}
+              onDeleteKeyframe={(itemId, kfId) => {
+                const updatedTracks = editorProject.tracks.map((t) => ({
+                  ...t,
+                  items: t.items.map((i) => {
+                    if (i.id !== itemId) return i;
+                    return { ...i, keyframes: i.keyframes.filter((k) => k.id !== kfId) };
+                  }),
+                }));
+                pushHistory({ ...editorProject, tracks: updatedTracks });
+              }}
+            />
+          </div>
+
+          {/* WORKSPACE BOTTOM: TIMELINE */}
+          <Timeline
+            project={editorProject}
+            playhead={currentTime}
+            isPlaying={isPlaying}
+            onPlayheadChange={(time) => {
+              setCurrentTime(time);
+              if (videoRef.current) videoRef.current.currentTime = time;
+            }}
+            onTogglePlay={togglePlay}
+            onUpdateProject={(updated) => pushHistory(updated)}
+            selectedItemId={selectedItemId}
+            onSelectItem={(itemId, trackId) => {
+              setSelectedItemId(itemId);
+              setSelectedTrackId(trackId);
+            }}
+            onSplit={handleSplit}
+            onRippleDelete={handleRippleDelete}
+            onDuplicate={handleDuplicate}
+            onFreezeFrame={handleFreezeFrame}
+            onSnapshot={handleSnapshot}
+          />
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         {/* CENTER: Video Canvas & Live CSS Overlay */}
         <div className="flex-1 bg-neutral-950 flex flex-col items-center justify-center p-4 md:p-6 overflow-y-auto">
           {/* Notifications */}
@@ -1177,6 +1691,54 @@ export const ClipEditorPage: React.FC = () => {
             >
               <Volume2 className="w-3.5 h-3.5" />
               Audio
+            </button>
+
+            <button
+              onClick={() => setActiveTab('producer')}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'producer'
+                  ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow'
+                  : 'text-purple-400 hover:text-purple-200'
+              }`}
+            >
+              <Wand2 className="w-3.5 h-3.5" />
+              Producer
+            </button>
+
+            <button
+              onClick={() => setActiveTab('translate')}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'translate'
+                  ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5 text-orange-400" />
+              Translate
+            </button>
+
+            <button
+              onClick={() => setActiveTab('content_pack')}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'content_pack'
+                  ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5 text-purple-400" />
+              Content Pack
+            </button>
+
+            <button
+              onClick={() => setActiveTab('hook_lab')}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'hook_lab'
+                  ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow'
+                  : 'text-amber-400 hover:text-amber-200'
+              }`}
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              Hook Lab
             </button>
           </div>
 
@@ -2199,9 +2761,194 @@ export const ClipEditorPage: React.FC = () => {
                 )}
               </div>
             )}
+
+            {/* 5. AI PRODUCER TAB */}
+            {activeTab === 'producer' && clip && (
+              <ProducerPanel
+                clipId={clip.id}
+                clip={clip}
+                onPlanApplied={(updated) => {
+                  setClip(updated);
+                  loadData();
+                }}
+              />
+            )}
+
+            {/* 6. TRANSLATE & MULTILINGUAL DUBBING TAB (PHASE 21) */}
+            {activeTab === 'translate' && (
+              <div className="flex-1 overflow-hidden h-full">
+                <TranslationWorkspace
+                  project={editorProject}
+                  sourceTranscriptText={cues.map((c) => c.text).join(' ')}
+                  sourceSegments={cues.map((c, i) => ({
+                    id: c.id || `cue-${i}`,
+                    start: c.start,
+                    end: c.end,
+                    text: c.text,
+                    speaker_id: 'speaker-0',
+                  }))}
+                  onApplyCaptions={(_lang, translatedSegs) => {
+                    const newCues: TimedCaptionCue[] = translatedSegs.map((s, idx) => ({
+                      id: s.segment_id || `cue-${idx}`,
+                      start: s.start_time,
+                      end: s.end_time,
+                      text: s.translated_text,
+                    }));
+                    setCues(newCues);
+                    markDirty();
+                  }}
+                  onRefreshProject={loadData}
+                />
+              </div>
+            )}
+
+            {/* 7. CONTENT PACK TAB (PHASE 23) */}
+            {activeTab === 'content_pack' && clip && (
+              <div className="flex-1 overflow-hidden h-full">
+                <ContentPackWorkspace
+                  projectId={clip.project_id}
+                  clipId={clip.id}
+                  clipTitle={clip.title || 'Clip'}
+                  clipDurationSeconds={clip.duration_seconds}
+                  onOpenHookLab={() => setActiveTab('hook_lab')}
+                />
+              </div>
+            )}
+
+            {/* 8. HOOK LAB TAB (PHASE 24) */}
+            {activeTab === 'hook_lab' && clip && (
+              <div className="flex-1 overflow-hidden h-full">
+                <HookLabWorkspace
+                  clipId={clip.id}
+                  projectId={clip.project_id}
+                  editorProjectId={editorProject?.id}
+                  clipTitle={clip.title || 'Clip'}
+                  clipDurationSeconds={clip.duration_seconds}
+                  onEditorProjectUpdated={loadData}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
+      )}
+
+      {/* Command Palette (⌘K) */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onSplit={handleSplit}
+        onAddText={() => {
+          if (!editorProject) return;
+          const textTrack = editorProject.tracks.find((t) => t.type === 'TEXT') || editorProject.tracks[0];
+          if (!textTrack) return;
+          const newItem: EditorTrackItem = {
+            id: crypto.randomUUID(),
+            track_id: textTrack.id,
+            type: 'TEXT',
+            timeline_start: currentTime,
+            timeline_end: currentTime + 4,
+            source_start: 0,
+            source_end: 4,
+            transform: { position_x: 0, position_y: 0, scale: 1, rotation: 0, opacity: 1 },
+            speed: { speed: 1.0, pitch_preserved: true },
+            effects: [],
+            keyframes: [],
+            locked: false,
+            muted: false,
+            hidden: false,
+            z_index: 0,
+            text: {
+              text: 'Headline Text',
+              font_family: 'Inter',
+              font_size: 48,
+              font_weight: 'bold',
+              italic: false,
+              alignment: 'center',
+              color: '#FFFFFF',
+            },
+          };
+          const updatedTracks = editorProject.tracks.map((t) =>
+            t.id === textTrack.id ? { ...t, items: [...t.items, newItem] } : t
+          );
+          pushHistory({ ...editorProject, tracks: updatedTracks });
+          setSelectedItemId(newItem.id);
+          setSelectedTrackId(textTrack.id);
+        }}
+        onAddCaption={() => {
+          if (cues && cues.length > 0 && editorProject) {
+            const capTrack = editorProject.tracks.find((t) => t.type === 'CAPTION') || editorProject.tracks[0];
+            if (capTrack) {
+              const newItem: EditorTrackItem = {
+                id: crypto.randomUUID(),
+                track_id: capTrack.id,
+                type: 'CAPTION',
+                timeline_start: 0,
+                timeline_end: editorProject.canvas.duration,
+                source_start: 0,
+                source_end: editorProject.canvas.duration,
+                transform: { position_x: 0, position_y: 0, scale: 1, rotation: 0, opacity: 1 },
+                speed: { speed: 1.0, pitch_preserved: true },
+                effects: [],
+                keyframes: [],
+                locked: false,
+                muted: false,
+                hidden: false,
+                z_index: 0,
+                caption: {
+                  cues,
+                  style: 'bold',
+                  position: 'bottom',
+                  highlight_color: '#FF6B35',
+                  primary_color: '#FFFFFF',
+                },
+              };
+              const updatedTracks = editorProject.tracks.map((t) =>
+                t.id === capTrack.id ? { ...t, items: [...t.items, newItem] } : t
+              );
+              pushHistory({ ...editorProject, tracks: updatedTracks });
+            }
+          }
+        }}
+        onReframe={() => {
+          if (editorProject) {
+            pushHistory({
+              ...editorProject,
+              canvas: {
+                ...editorProject.canvas,
+                aspect_ratio: '9:16',
+                width: 1080,
+                height: 1920,
+              },
+            });
+          }
+        }}
+        onNormalizeAudio={() => {
+          if (editorProject) {
+            const updatedTracks = editorProject.tracks.map((t) => ({
+              ...t,
+              items: t.items.map((i) => ({
+                ...i,
+                audio: {
+                  volume: i.audio?.volume ?? 1.0,
+                  fade_in: i.audio?.fade_in || 0,
+                  fade_out: i.audio?.fade_out || 0,
+                  normalized: true,
+                  target_lufs: -16,
+                },
+              })),
+            }));
+            pushHistory({ ...editorProject, tracks: updatedTracks });
+          }
+        }}
+        onOpenProducer={() => {
+          toggleEditorMode('beginner');
+          setActiveTab('producer');
+        }}
+        onRender={handleRenderChanges}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+      />
 
       {/* Information Modal: Improve Timing */}
       {showTimingModal && (

@@ -17,6 +17,7 @@ import {
   CreditCard,
   Shield,
   TrendingUp,
+  Brain,
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +25,7 @@ import { useAuth } from '../context/AuthContext';
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/projects/new', label: 'New Project', icon: PlusCircle },
+  { to: '/brand', label: 'Brand Brain', icon: Brain },
   { to: '/analytics', label: 'Analytics', icon: TrendingUp },
   { to: '/publishing', label: 'Publishing', icon: Share2 },
   { to: '/billing', label: 'Billing & Plans', icon: CreditCard },

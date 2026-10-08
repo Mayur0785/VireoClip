@@ -1,10 +1,11 @@
-import { TranscriptSegment, CreatorProfileData } from '../types/index.js';
+import { TranscriptSegment, CreatorProfileData, MultimodalTimeline } from '../types/index.js';
 
 export interface ClipPromptContext {
   segments: TranscriptSegment[];
   durationSeconds?: number | null;
   creatorProfile?: Partial<CreatorProfileData> | null;
   customNotes?: string;
+  multimodalTimeline?: MultimodalTimeline | null;
 }
 
 export class ClipPromptService {
@@ -40,7 +41,7 @@ export class ClipPromptService {
    * Assembles the complete prompt with indexed transcript and creator context
    */
   public static buildClipAnalysisPrompt(context: ClipPromptContext): string {
-    const { segments, durationSeconds, creatorProfile, customNotes } = context;
+    const { segments, durationSeconds, creatorProfile, customNotes, multimodalTimeline } = context;
 
     const indexedTranscript = this.formatIndexedTranscript(segments);
 
@@ -74,9 +75,33 @@ export class ClipPromptService {
       notesContext = `CREATOR NOTES / FOCUS AREA:\n${customNotes.trim()}\n\n`;
     }
 
+    let multimodalContext = '';
+    if (multimodalTimeline) {
+      const parts: string[] = [];
+      parts.push(`- Total Scene Cuts Detected: ${multimodalTimeline.scene_cuts.length}`);
+      parts.push(`- Average Visual Activity: ${multimodalTimeline.summary_metadata.average_visual_activity}/100`);
+      if (multimodalTimeline.summary_metadata.ocr_status === 'detected') {
+        const ocrTexts = multimodalTimeline.keyframes
+          .map((k) => k.ocr_text)
+          .filter((t): t is string => Boolean(t && t.length > 0));
+        if (ocrTexts.length > 0) {
+          parts.push(`- On-Screen Graphics/Titles Detected: ${ocrTexts.slice(0, 5).join('; ')}`);
+        }
+      }
+      if (parts.length > 0) {
+        multimodalContext = [
+          'MULTIMODAL SIGNALS & PACING:',
+          ...parts,
+          'Prioritize segments that align with high visual pacing and topic changes.',
+          '',
+        ].join('\n');
+      }
+    }
+
     return [
       personaContext,
       notesContext,
+      multimodalContext,
       `TRANSCRIPT SEGMENTS (${segments.length} segments, total duration ~${durationSeconds ? Math.round(durationSeconds) : 'N/A'}s):`,
       '---',
       indexedTranscript,

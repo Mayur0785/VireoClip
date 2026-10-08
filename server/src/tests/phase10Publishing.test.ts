@@ -8,8 +8,8 @@ import { getMongoDb, closeMongo } from '../db/mongoClient.js';
 import { PublishedPostRecord, PublishJobRecord } from '../types/index.js';
 
 describe('Phase 10 — Publishing & Scheduling Deterministic Tests', () => {
-  const testUserId = 'a4d30f59-432e-48ac-a870-c455d351e25e';
-  const otherUserId = 'b5e41f60-543f-49bd-b981-d566e462f36f';
+  const testUserId = 'a4d30f59-432e-48ac-a870-c455d351e210';
+  const otherUserId = 'b5e41f60-543f-49bd-b981-d566e462f360';
   const testProjectId = '73e3ddfc-739f-499a-8fca-c057424ca84f';
 
   let testConnectionId: string;

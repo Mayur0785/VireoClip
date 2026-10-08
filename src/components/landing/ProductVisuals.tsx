@@ -6,7 +6,6 @@ import {
   Clock3,
   FileText,
   Play,
-  Sparkles,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import creatorVideo from "../../assets/landing/creator-video.webp";
@@ -29,97 +28,6 @@ function VideoTile({ compact = false }: { compact?: boolean }) {
           <Play size={18} fill="currentColor" />
         </span>
         <span className="lv-video-label">YOUR VIDEO</span>
-      </div>
-    </div>
-  );
-}
-
-export function HeroVisual() {
-  return (
-    <div
-      className="lv-hero-stage"
-      aria-label="Illustration of one uploaded video becoming a transcript and six platform drafts"
-    >
-      <div className="lv-stage-halo" />
-      <div className="lv-floating lv-floating-youtube">
-        <span className="lv-floating-kicker">YOUTUBE · TITLE</span>
-        <strong>
-          Give your best ideas
-          <br />a bigger audience.
-        </strong>
-        <span className="lv-floating-foot">
-          Description + chapters <ArrowUpRight size={13} />
-        </span>
-      </div>
-      <div className="lv-floating lv-floating-instagram">
-        <span className="lv-floating-kicker">INSTAGRAM · CAPTION</span>
-        <strong>
-          One idea, a new angle
-          <br />
-          for your feed.
-        </strong>
-        <span className="lv-mini-tags">#creator #ideas #video</span>
-      </div>
-      <div className="lv-app-frame">
-        <div className="lv-app-top">
-          <Logo compact />
-          <div className="lv-app-top-label">
-            Content workspace <span> / </span> New project
-          </div>
-          <span className="lv-app-top-status">
-            <Check size={11} /> Ready to review
-          </span>
-        </div>
-        <div className="lv-app-inner">
-          <div className="lv-app-heading">
-            <div>
-              <span className="lv-mini-eyebrow">YOUR CONTENT KIT</span>
-              <h3>From your video, to everywhere.</h3>
-            </div>
-            <span className="lv-app-pill">Illustrative preview</span>
-          </div>
-          <div className="lv-app-columns">
-            <VideoTile />
-            <div className="lv-transcript">
-              <div className="lv-panel-title">
-                <AudioLines size={15} /> Transcript <span>Auto generated</span>
-              </div>
-              <p>
-                <time>00:18</time> “The most useful ideas deserve more than one
-                post.”
-              </p>
-              <p>
-                <time>00:42</time> “Start with the message, then shape it for
-                each channel.”
-              </p>
-              <p>
-                <time>01:06</time> “One video can become a whole content kit.”
-              </p>
-            </div>
-          </div>
-          <div className="lv-app-divider" />
-          <div className="lv-app-bottom">
-            <span>
-              <Sparkles size={14} /> Ready for your channels
-            </span>
-            <div>
-              {channels.map((channel) => (
-                <span key={channel}>{channel}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="lv-floating lv-floating-short">
-        <span className="lv-floating-kicker">SHORTS / REELS · MOMENT</span>
-        <strong>
-          <Clock3 size={16} /> 00:42
-        </strong>
-        <small>Shape it for each channel</small>
-      </div>
-      <div className="lv-stage-caption">
-        <span className="lv-stage-caption-dot" /> ONE VIDEO <span>→</span> SIX
-        WAYS TO SHARE
       </div>
     </div>
   );
