@@ -2981,9 +2981,301 @@ export interface HookLabCapabilityModel {
   editor_apply: 'SUPPORTED' | 'NOT_CONFIGURED' | 'NOT_SUPPORTED' | 'ERROR';
   analytics_signal: 'SUPPORTED' | 'INSUFFICIENT_DATA' | 'NOT_SUPPORTED' | 'ERROR';
   voiceover: 'SUPPORTED' | 'NOT_CONFIGURED' | 'NOT_SUPPORTED' | 'ERROR';
-  thumbnail_lab: 'DEFERRED_TO_PHASE_25';
+  thumbnail_lab: 'DEFERRED_TO_PHASE_25' | 'SUPPORTED';
   autopilot: 'DEFERRED_TO_PHASE_26';
   ab_studio: 'DEFERRED_TO_PHASE_27';
 }
+
+
+// ── Phase 25: Vireo Thumbnail Lab Types ─────────────────────────────
+
+export type ThumbnailStyleDirection =
+  | 'EXPRESSIVE_CREATOR_PORTRAIT'
+  | 'CINEMATIC_STORYTELLING'
+  | 'BOLD_TYPOGRAPHY'
+  | 'CLEAN_EDUCATIONAL'
+  | 'PODCAST_EDITORIAL'
+  | 'MINIMAL_PREMIUM'
+  | 'HIGH_CONTRAST_VISUAL'
+  | 'PRODUCT_SUBJECT_FOCUSED';
+
+export type ThumbnailAspectRatio = '16:9' | '9:16' | '1:1';
+
+export type ThumbnailSessionStatus = 'DRAFT' | 'READY' | 'APPROVED' | 'ARCHIVED';
+
+export type ThumbnailConceptStatus = 'GENERATED' | 'EDITED' | 'APPROVED' | 'FAVORITED' | 'REJECTED';
+
+export interface ThumbnailTextLayer {
+  headline: string;
+  subheadline?: string;
+  font_family: string;
+  font_weight: string | number;
+  font_size: number;
+  line_height?: number;
+  text_color: string;
+  highlight_color?: string;
+  stroke_color?: string;
+  stroke_width: number;
+  shadow_color?: string;
+  shadow_blur: number;
+  shadow_offset_y: number;
+  position_x: number; // 0.0 to 1.0 (relative canvas x)
+  position_y: number; // 0.0 to 1.0 (relative canvas y)
+  alignment: 'left' | 'center' | 'right';
+  letter_spacing?: number;
+  transform_case?: 'none' | 'uppercase' | 'titlecase';
+  badge_text?: string;
+  badge_color?: string;
+}
+
+export interface ThumbnailComposition {
+  crop_x: number; // 0.0 to 1.0
+  crop_y: number; // 0.0 to 1.0
+  zoom_level: number; // 1.0 to 2.5
+  rotation_deg?: number;
+  brightness: number; // 0.5 to 1.5 (default 1.0)
+  contrast: number; // 0.5 to 2.0 (default 1.0)
+  saturation: number; // 0.5 to 2.0 (default 1.0)
+  blur_background?: boolean;
+  vignette_intensity?: number; // 0.0 to 1.0
+  overlay_gradient?: 'none' | 'subtle_dark' | 'cinematic_vignette' | 'brand_tint';
+}
+
+export interface ThumbnailScoreBreakdown {
+  readability: number;      // 0–100 (25% weight)
+  contrast: number;         // 0–100 (20% weight)
+  composition: number;      // 0–100 (15% weight)
+  subject_visibility: number;// 0–100 (15% weight)
+  brand_fit: number;        // 0–100 (15% weight)
+  topic_relevance: number;  // 0–100 (10% weight)
+}
+
+export interface ThumbnailDiagnostics {
+  overall_score: number; // 0-100 deterministic visual score
+  score_breakdown: ThumbnailScoreBreakdown;
+  summary: string;
+  positives: string[];
+  warnings: string[];
+  safe_area_compliant: boolean;
+  contrast_ratio_estimate: number; // estimated WCAG ratio e.g. 4.5
+  character_count_ok: boolean;
+  brand_font_applied: boolean;
+  brand_color_applied: boolean;
+  face_detected_in_frame: boolean;
+}
+
+export interface ThumbnailSourceFrame {
+  id: string;
+  timestamp: number;
+  frame_path: string;
+  preview_url: string;
+  width: number;
+  height: number;
+  has_face: boolean;
+  ocr_text_preview?: string;
+  scene_cut_score?: number;
+}
+
+export interface ThumbnailConcept {
+  id: string;
+  thumbnail_session_id: string;
+  user_id: string;
+  variant_index: number;
+  style_direction: ThumbnailStyleDirection;
+  title: string;
+  aspect_ratio: ThumbnailAspectRatio;
+  reference_frame_id?: string;
+  reference_frame_timestamp?: number;
+  reference_frame_path?: string;
+  generated_image_url?: string;
+  generated_image_path?: string;
+  is_ai_generated: boolean;
+  image_provider: string; // 'none' | 'local_frame' | 'ai_generated'
+  text_layer: ThumbnailTextLayer;
+  composition: ThumbnailComposition;
+  brand_rules_used: string[];
+  diagnostics: ThumbnailDiagnostics;
+  status: ThumbnailConceptStatus;
+  locked: boolean;
+  manual_edit: boolean;
+  approved: boolean;
+  favorited: boolean;
+  prompt_used?: string;
+  model_used?: string;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+export interface ThumbnailLabSession {
+  id: string;
+  user_id: string;
+  project_id: string;
+  clip_id: string;
+  content_pack_id?: string;
+  brand_brain_id?: string;
+  brand_brain_version?: number;
+  aspect_ratio: ThumbnailAspectRatio;
+  target_platform: OutputPlatform;
+  target_audience?: string;
+  video_topic?: string;
+  objective?: string;
+  active_concept_id?: string;
+  approved_concept_id?: string;
+  status: ThumbnailSessionStatus;
+  version: number;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+export interface ThumbnailLabVersionSnapshot {
+  id: string;
+  user_id: string;
+  thumbnail_session_id: string;
+  concept_id: string;
+  version: number;
+  snapshot: ThumbnailConcept;
+  change_summary: string;
+  created_at: string | Date;
+}
+
+export interface ThumbnailCapabilityModel {
+  image_provider_status: 'SUPPORTED' | 'NOT_CONFIGURED' | 'ERROR';
+  image_provider_name: string;
+  source_frame_extraction: 'SUPPORTED' | 'NOT_CONFIGURED';
+  brand_brain_integration: 'SUPPORTED';
+  thumbnail_scoring: 'SUPPORTED';
+  publishing_handoff: 'SUPPORTED';
+  supported_aspect_ratios: ThumbnailAspectRatio[];
+  supported_style_directions: ThumbnailStyleDirection[];
+  max_concepts_per_session: number;
+}
+
+export const THUMBNAIL_LAB_LIMITS = {
+  MAX_CONCEPTS_PER_SESSION: 12,
+  DEFAULT_CONCEPT_COUNT: 4,
+  MAX_HEADLINE_LENGTH: 80,
+  MAX_SUBHEADLINE_LENGTH: 120,
+  MAX_USER_INSTRUCTION_LENGTH: 500,
+  MAX_SOURCE_FRAMES_SAMPLED: 24,
+  SUPPORTED_ASPECT_RATIOS: ['16:9', '9:16', '1:1'] as const,
+  APPROVED_FONTS: [
+    'Inter',
+    'Montserrat',
+    'Cabinet Grotesk',
+    'Poppins',
+    'Bebas Neue',
+    'Oswald',
+    'Plus Jakarta Sans',
+    'Anton',
+    'Roboto'
+  ] as const,
+} as const;
+
+
+// ── Phase 26: Full Pipeline Autopilot Types ─────────────────────────
+
+export type AutopilotRunStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'BLOCKED'
+  | 'CANCELLED'
+  | 'APPROVED';
+
+export type AutopilotStepName =
+  | 'PRODUCER'
+  | 'HOOK_LAB'
+  | 'THUMBNAIL_LAB'
+  | 'CONTENT_PACK'
+  | 'APPROVAL';
+
+export type AutopilotStepStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'BLOCKED'
+  | 'SKIPPED';
+
+export interface AutopilotStepResult {
+  step: AutopilotStepName;
+  status: AutopilotStepStatus;
+  started_at?: string | Date;
+  completed_at?: string | Date;
+  duration_ms?: number;
+  output_id?: string;
+  output_summary?: string;
+  error?: string;
+  retry_eligible: boolean;
+  artifacts?: Record<string, any>;
+}
+
+export interface AutopilotSettings {
+  producer_mode?: ProducerMode;
+  target_platform?: OutputPlatform;
+  user_instruction?: string;
+  target_duration?: number;
+  thumbnail_style?: ThumbnailStyleDirection;
+  content_pack_mode?: ContentPackGenerationMode;
+  brand_brain_id?: string;
+  auto_select_highest_scoring_thumbnail?: boolean;
+}
+
+export interface AutopilotRunRecord {
+  id: string;
+  user_id: string;
+  project_id: string;
+  clip_id: string;
+  status: AutopilotRunStatus;
+  current_step: AutopilotStepName;
+  settings: AutopilotSettings;
+  steps: AutopilotStepResult[];
+  producer_plan_id?: string;
+  hook_session_id?: string;
+  selected_hook_candidate_id?: string;
+  hook_selection_rationale?: string;
+  thumbnail_session_id?: string;
+  selected_thumbnail_concept_id?: string;
+  thumbnail_selection_rationale?: string;
+  thumbnail_score?: number;
+  content_pack_id?: string;
+  is_approved: boolean;
+  approved_by?: string;
+  approved_at?: string | Date;
+  publishing_handoff?: Record<string, any>;
+  error?: string;
+  execution_lock?: string;
+  execution_lock_expires_at?: Date | string;
+  execution_lock_owner?: string;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+export interface CreateAutopilotRunDTO {
+  clip_id: string;
+  settings?: AutopilotSettings;
+  idempotency_key?: string;
+}
+
+export interface ApproveAutopilotRunDTO {
+  selected_hook_candidate_id?: string;
+  selected_thumbnail_concept_id?: string;
+  content_pack_id?: string;
+  custom_instruction?: string;
+}
+
+export interface AutopilotCapabilityModel {
+  orchestration_status: 'SUPPORTED' | 'NOT_CONFIGURED' | 'ERROR';
+  producer_integration: 'SUPPORTED';
+  hook_lab_integration: 'SUPPORTED';
+  thumbnail_lab_integration: 'SUPPORTED';
+  content_pack_integration: 'SUPPORTED';
+  approval_gate: 'MANDATORY';
+  publishing_handoff: 'SUPPORTED';
+  background_worker: 'SYNCHRONOUS_TASK_ORCHESTRATOR';
+}
+
+
 
 

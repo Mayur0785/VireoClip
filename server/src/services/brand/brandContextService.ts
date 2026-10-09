@@ -12,10 +12,12 @@ export type BrandTaskType =
   | 'EDITOR'
   | 'CAPTIONS'
   | 'HOOK_LAB'
+  | 'THUMBNAIL_LAB'
   | 'PUBLISH'
   | 'TRANSLATION'
   | 'BROLL'
   | 'AUDIO';
+
 
 export interface GetBrandContextOptions {
   userId: string;

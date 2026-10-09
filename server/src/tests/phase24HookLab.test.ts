@@ -690,4 +690,8 @@ describe('Phase 24 — Vireo Hook Lab Test Suite', () => {
       assert.equal(typeof preview.verified, 'boolean');
     });
   });
+
+  after(async () => {
+    await closeMongo().catch(() => undefined);
+  });
 });

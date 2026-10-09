@@ -10,6 +10,8 @@ import analyticsRoutes from './analyticsRoutes.js';
 import brandBrainRoutes from './brandBrainRoutes.js';
 import contentPackRoutes from './contentPackRoutes.js';
 import hookLabRoutes from './hookLabRoutes.js';
+import thumbnailLabRoutes from './thumbnailLabRoutes.js';
+import autopilotRoutes from './autopilotRoutes.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { getProfiles, saveProfiles, getCreatorProfile, updateCreatorProfile } from '../controllers/profileController.js';
@@ -32,6 +34,9 @@ apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/brand-brain', brandBrainRoutes);
 apiRouter.use('/content-packs', contentPackRoutes);
 apiRouter.use('/hook-lab', hookLabRoutes);
+apiRouter.use('/thumbnail-lab', thumbnailLabRoutes);
+apiRouter.use('/autopilot', autopilotRoutes);
 
 export default apiRouter;
+
 

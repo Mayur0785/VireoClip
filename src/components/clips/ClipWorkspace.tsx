@@ -24,7 +24,9 @@ import {
   X,
   Wand2,
   Layers,
+  Image as ImageIcon,
 } from 'lucide-react';
+
 import { Button } from '../Button';
 import { SpotlightCard } from '../react-bits/SpotlightCard';
 import { ClipCandidate, ClipCandidateStatus, Transcript, RenderedClip, MomentSearchResult } from '../../types';
@@ -1092,6 +1094,28 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                               <Layers className="size-3.5 mr-1.5" />
                               Content Pack
                             </Button>
+                            <Link to={`/clips/${clip.id}/edit?tab=thumbnail_lab`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs font-semibold border-rose-500/60 bg-rose-500/10 text-rose-400 hover:bg-rose-600 hover:text-white shadow-xs transition-colors"
+                                title="Open Thumbnail Lab (brand-aware covers, typography, diagnostics)"
+                              >
+                                <ImageIcon className="size-3.5 mr-1.5" />
+                                Thumbnail
+                              </Button>
+                            </Link>
+                            <Link to={`/clips/${clip.id}/edit?tab=autopilot`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs font-semibold border-purple-500/60 bg-gradient-to-r from-purple-500/10 to-indigo-500/10 text-purple-300 hover:from-purple-600 hover:to-indigo-600 hover:text-white shadow-xs transition-colors"
+                                title="Run Full Pipeline Autopilot (Producer -> Hook Lab -> Thumbnail Lab -> Content Pack)"
+                              >
+                                <Sparkles className="size-3.5 mr-1.5 text-purple-400" />
+                                Autopilot
+                              </Button>
+                            </Link>
                             <Button
                               variant="outline"
                               size="sm"
@@ -1100,6 +1124,7 @@ export const ClipWorkspace: React.FC<ClipWorkspaceProps> = ({
                             >
                               {previewClipId === clip.id ? 'Close' : 'Preview'}
                             </Button>
+
                             <Button
                               variant="outline"
                               size="sm"

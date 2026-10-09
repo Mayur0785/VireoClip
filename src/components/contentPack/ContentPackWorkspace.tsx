@@ -43,6 +43,7 @@ export interface ContentPackWorkspaceProps {
   clipDurationSeconds?: number;
   onClose?: () => void;
   onOpenHookLab?: (hookText?: string) => void;
+  onOpenThumbnailLab?: () => void;
 }
 
 export const ContentPackWorkspace: React.FC<ContentPackWorkspaceProps> = ({
@@ -52,7 +53,9 @@ export const ContentPackWorkspace: React.FC<ContentPackWorkspaceProps> = ({
   clipDurationSeconds = 30,
   onClose,
   onOpenHookLab,
+  onOpenThumbnailLab,
 }) => {
+
   const [pack, setPack] = useState<ContentPack | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -758,11 +761,28 @@ export const ContentPackWorkspace: React.FC<ContentPackWorkspaceProps> = ({
                     <ImageIcon className="size-4 text-rose-400" /> Thumbnail Creative Direction
                   </span>
                   <span className="text-[11px] text-muted-foreground">
-                    (Visual brief & headline text; Phase 25 implements full Thumbnail Lab)
+                    (Visual brief & headline text)
                   </span>
                 </div>
-                {collapsedSections['thumbnail'] ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+                <div className="flex items-center gap-2">
+                  {onOpenThumbnailLab && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenThumbnailLab();
+                      }}
+                      className="text-xs border-rose-500/40 text-rose-400 hover:bg-rose-500/10 h-7 px-2.5 flex items-center gap-1"
+                    >
+                      <ImageIcon className="size-3" />
+                      Open in Thumbnail Lab
+                    </Button>
+                  )}
+                  {collapsedSections['thumbnail'] ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+                </div>
               </div>
+
 
               {!collapsedSections['thumbnail'] && (
                 <div className="p-4 space-y-4">

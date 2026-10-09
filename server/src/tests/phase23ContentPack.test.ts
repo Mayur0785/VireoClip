@@ -673,4 +673,8 @@ describe('Phase 23 — Vireo Content Pack Test Suite', () => {
       }
     });
   });
+
+  after(async () => {
+    await closeMongo().catch(() => undefined);
+  });
 });

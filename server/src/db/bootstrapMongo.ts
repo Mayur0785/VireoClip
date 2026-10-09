@@ -15,6 +15,7 @@ const collections = [
   'editor_projects',
   'hook_lab_sessions',
   'hook_candidates',
+  'autopilot_runs',
 ] as const;
 
 
@@ -216,7 +217,28 @@ export async function bootstrapMongo(db?: Db): Promise<void> {
     database.collection('hook_candidates').createIndex({ hook_type: 1 }),
     database.collection('hook_candidates').createIndex({ locked: 1 }),
     database.collection('hook_candidates').createIndex({ status: 1 }),
+    // Phase 25: Vireo Thumbnail Lab indexes
+    database.collection('thumbnail_lab_sessions').createIndex({ id: 1 }, { unique: true }),
+    database.collection('thumbnail_lab_sessions').createIndex({ user_id: 1, created_at: -1 }),
+    database.collection('thumbnail_lab_sessions').createIndex({ clip_id: 1, created_at: -1 }),
+    database.collection('thumbnail_lab_sessions').createIndex({ project_id: 1 }),
+    database.collection('thumbnail_lab_sessions').createIndex({ status: 1 }),
+    database.collection('thumbnail_concepts').createIndex({ id: 1 }, { unique: true }),
+    database.collection('thumbnail_concepts').createIndex({ thumbnail_session_id: 1, variant_index: 1 }),
+    database.collection('thumbnail_concepts').createIndex({ user_id: 1 }),
+    database.collection('thumbnail_concepts').createIndex({ style_direction: 1 }),
+    database.collection('thumbnail_concepts').createIndex({ locked: 1 }),
+    database.collection('thumbnail_concepts').createIndex({ status: 1 }),
+    database.collection('thumbnail_versions').createIndex({ id: 1 }, { unique: true }),
+    database.collection('thumbnail_versions').createIndex({ user_id: 1, thumbnail_session_id: 1, version: -1 }),
+    // Phase 26: Full Pipeline Autopilot indexes
+    database.collection('autopilot_runs').createIndex({ id: 1 }, { unique: true }),
+    database.collection('autopilot_runs').createIndex({ user_id: 1, created_at: -1 }),
+    database.collection('autopilot_runs').createIndex({ clip_id: 1, created_at: -1 }),
+    database.collection('autopilot_runs').createIndex({ project_id: 1 }),
+    database.collection('autopilot_runs').createIndex({ status: 1 }),
   ]);
 }
+
 
 

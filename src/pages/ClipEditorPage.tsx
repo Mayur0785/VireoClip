@@ -30,12 +30,16 @@ import {
   Globe,
   Brain,
   Flame,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { ProducerPanel } from '../components/producer/ProducerPanel';
 import { TranslationWorkspace } from '../components/translation/TranslationWorkspace';
 import { ContentPackWorkspace } from '../components/contentPack/ContentPackWorkspace';
 import { HookLabWorkspace } from '../components/hookLab/HookLabWorkspace';
+import { ThumbnailLabWorkspace } from '../components/thumbnailLab/ThumbnailLabWorkspace';
+import { AutopilotWorkspace } from '../components/autopilot/AutopilotWorkspace';
 import { clipRenderService } from '../services/clipRenderService';
+
 import { Timeline } from '../components/editor/Timeline';
 import { EditorCanvas } from '../components/editor/EditorCanvas';
 import { InspectorPanel } from '../components/editor/InspectorPanel';
@@ -261,7 +265,7 @@ export const ClipEditorPage: React.FC = () => {
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio' | 'producer' | 'translate' | 'content_pack' | 'hook_lab'>('captions');
+  const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio' | 'producer' | 'translate' | 'content_pack' | 'hook_lab' | 'thumbnail_lab' | 'autopilot'>('captions');
 
   // Check URL query for default tab
   useEffect(() => {
@@ -272,8 +276,13 @@ export const ClipEditorPage: React.FC = () => {
       setActiveTab('content_pack');
     } else if (params.get('tab') === 'hook_lab' || params.get('tab') === 'hook-lab' || params.get('tab') === 'hook') {
       setActiveTab('hook_lab');
+    } else if (params.get('tab') === 'thumbnail_lab' || params.get('tab') === 'thumbnail' || params.get('tab') === 'thumb') {
+      setActiveTab('thumbnail_lab');
+    } else if (params.get('tab') === 'autopilot') {
+      setActiveTab('autopilot');
     }
   }, []);
+
 
   // Phase 18: Pro Video Editor State
   const [editorMode, setEditorMode] = useState<'beginner' | 'pro'>(() => {
@@ -1740,7 +1749,32 @@ export const ClipEditorPage: React.FC = () => {
               <Flame className="w-3.5 h-3.5 text-amber-400" />
               Hook Lab
             </button>
+
+            <button
+              onClick={() => setActiveTab('thumbnail_lab')}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'thumbnail_lab'
+                  ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow'
+                  : 'text-rose-400 hover:text-rose-200'
+              }`}
+            >
+              <ImageIcon className="w-3.5 h-3.5 text-rose-400" />
+              Thumbnail
+            </button>
+
+            <button
+              onClick={() => setActiveTab('autopilot')}
+              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+                activeTab === 'autopilot'
+                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
+                  : 'text-purple-400 hover:text-purple-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              Autopilot
+            </button>
           </div>
+
 
           {/* Tab Content Panels */}
           <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-6">
@@ -2811,9 +2845,11 @@ export const ClipEditorPage: React.FC = () => {
                   clipTitle={clip.title || 'Clip'}
                   clipDurationSeconds={clip.duration_seconds}
                   onOpenHookLab={() => setActiveTab('hook_lab')}
+                  onOpenThumbnailLab={() => setActiveTab('thumbnail_lab')}
                 />
               </div>
             )}
+
 
             {/* 8. HOOK LAB TAB (PHASE 24) */}
             {activeTab === 'hook_lab' && clip && (
@@ -2828,7 +2864,32 @@ export const ClipEditorPage: React.FC = () => {
                 />
               </div>
             )}
+
+            {/* 9. THUMBNAIL LAB TAB (PHASE 25) */}
+            {activeTab === 'thumbnail_lab' && clip && (
+              <div className="flex-1 overflow-hidden h-full">
+                <ThumbnailLabWorkspace
+                  clipId={clip.id}
+                  projectId={clip.project_id}
+                  clipTitle={clip.title || 'Clip'}
+                  clipDurationSeconds={clip.duration_seconds}
+                />
+              </div>
+            )}
+
+            {/* 10. AUTOPILOT TAB (PHASE 26) */}
+            {activeTab === 'autopilot' && clip && (
+              <div className="flex-1 overflow-hidden h-full">
+                <AutopilotWorkspace
+                  clipId={clip.id}
+                  projectId={clip.project_id}
+                  clipTitle={clip.title || 'Clip'}
+                  clipDurationSeconds={clip.duration_seconds}
+                />
+              </div>
+            )}
           </div>
+
         </div>
       </div>
       )}

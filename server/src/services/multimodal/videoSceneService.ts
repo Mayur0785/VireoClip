@@ -22,6 +22,14 @@ export class VideoSceneService {
     if (process.env.FFMPEG_PATH && fs.existsSync(process.env.FFMPEG_PATH)) {
       return process.env.FFMPEG_PATH;
     }
+    // Check ffmpeg-static npm package if present
+    try {
+      const ffmpegStaticPath = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg.exe');
+      if (fs.existsSync(ffmpegStaticPath)) return ffmpegStaticPath;
+      const ffmpegStaticUnix = path.resolve(process.cwd(), 'node_modules/ffmpeg-static/ffmpeg');
+      if (fs.existsSync(ffmpegStaticUnix)) return ffmpegStaticUnix;
+    } catch {}
+
     const candidates = [
       '/opt/homebrew/bin/ffmpeg',
       '/usr/local/bin/ffmpeg',

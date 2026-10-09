@@ -117,6 +117,23 @@ const enums: Record<string, Record<string, readonly string[]>> = {
     delivery_mode: ['SPOKEN_REWRITE', 'TEXT_OVERLAY', 'CAPTION_OPEN', 'EDITORIAL_TRIM', 'REORDER_EXISTING', 'COMBINED'],
     status: ['GENERATED', 'EDITED', 'APPLIED', 'APPROVED', 'REJECTED'],
   },
+  thumbnail_lab_sessions: {
+    status: ['DRAFT', 'READY', 'APPROVED', 'ARCHIVED'],
+    aspect_ratio: ['16:9', '9:16', '1:1'],
+  },
+  thumbnail_concepts: {
+    style_direction: [
+      'EXPRESSIVE_CREATOR_PORTRAIT', 'CINEMATIC_STORYTELLING', 'BOLD_TYPOGRAPHY',
+      'CLEAN_EDUCATIONAL', 'PODCAST_EDITORIAL', 'MINIMAL_PREMIUM',
+      'HIGH_CONTRAST_VISUAL', 'PRODUCT_SUBJECT_FOCUSED',
+    ],
+    status: ['GENERATED', 'EDITED', 'APPROVED', 'FAVORITED', 'REJECTED'],
+    aspect_ratio: ['16:9', '9:16', '1:1'],
+  },
+  autopilot_runs: {
+    status: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED', 'APPROVED'],
+    current_step: ['PRODUCER', 'HOOK_LAB', 'THUMBNAIL_LAB', 'CONTENT_PACK', 'APPROVAL'],
+  },
 };
 const numericFields = new Set([
   'duration_seconds', 'start_seconds', 'end_seconds', 'engagement_score',
@@ -133,21 +150,25 @@ const numericFields = new Set([
   'version', 'original_duration', 'estimated_duration',
   'playhead', 'width', 'height', 'fps', 'duration', 'channels', 'sample_rate',
   'weight', 'loudness_target_lufs', 'music_level', 'stroke_width', 'position_y',
-  'variant_index', 'brand_brain_version', 'overall_hook_fit',
+  'variant_index', 'brand_brain_version', 'overall_hook_fit', 'reference_frame_timestamp',
+  'thumbnail_score', 'duration_ms', 'target_duration',
 ]);
 const arrayFields = new Set([
   'segments', 'words', 'raw_samples', 'smoothed_keyframes', 'scopes', 'tags', 'hashtags', 'scene_cuts', 'silence_intervals', 'face_intervals', 'keyframes', 'reasons', 'operations', 'key_decisions', 'tracks', 'items', 'effects', 'transitions', 'opportunities', 'suggestions', 'search_queries', 'voices', 'languages', 'terms', 'locked_terms',
   'primary_colors', 'secondary_colors', 'accent_colors', 'fonts', 'logo_asset_ids', 'preferred_aspect_ratios', 'preferred_layouts', 'tones', 'writing_styles', 'preferred_phrasing', 'avoid_phrasing', 'preferred_hook_types', 'banned_patterns', 'example_hooks', 'preferred_cta_types', 'approved_phrases', 'blocked_phrases', 'emphasis_rules',
-  'source_evidence', 'brand_rules_used', 'validation_warnings', 'leading_filler_words', 'issues', 'strengths', 'analysis_signals_used', 'positives', 'cautions',
+  'source_evidence', 'brand_rules_used', 'validation_warnings', 'leading_filler_words', 'issues', 'strengths', 'analysis_signals_used', 'positives', 'cautions', 'warnings',
+  'steps',
 ]);
 const objectFields = new Set([
   'metadata', 'crop_config', 'overlay_config', 'caption_config', 'caption_overrides', 'payload', 'platform_custom', 'timeline', 'summary_metadata', 'platform_suitability', 'scores', 'explanation', 'parameters', 'canvas', 'settings', 'transform', 'speed', 'audio', 'text', 'caption', 'color', 'filter', 'mask', 'chroma_key', 'density_rules', 'density_summary', 'applied_item', 'analysis', 'ducking', 'enhancement', 'stats', 'timing_adjustment',
   'identity', 'voice', 'visual', 'captions', 'hooks', 'cta', 'editing', 'publishing', 'translation', 'locks', 'rule_states', 'learning', 'snapshot', 'watermark_config', 'platform_preferences', 'confidence_by_dimension', 'preferred_clip_length_range', 'value',
   'item_counts', 'opening_window', 'multimodal_signals', 'reorder_plan', 'trim_plan', 'text_overlay_plan',
+  'text_layer', 'composition', 'diagnostics', 'score_breakdown',
+  'publishing_handoff', 'artifacts',
 ]);
 
 export function validateRecord(name: string, row: Record<string, unknown>): void {
-  for (const field of ['id', 'user_id', 'project_id', 'clip_id', 'candidate_id', 'parent_plan_id', 'producer_plan_id', 'editor_project_id', 'source_asset_id', 'translation_project_id', 'brand_brain_id', 'watermark_asset_id', 'content_pack_id', 'content_pack_item_id', 'hook_lab_session_id']) {
+  for (const field of ['id', 'user_id', 'project_id', 'clip_id', 'candidate_id', 'parent_plan_id', 'producer_plan_id', 'editor_project_id', 'source_asset_id', 'translation_project_id', 'brand_brain_id', 'watermark_asset_id', 'content_pack_id', 'content_pack_item_id', 'hook_lab_session_id', 'thumbnail_session_id', 'concept_id', 'reference_frame_id', 'active_concept_id', 'approved_concept_id', 'selected_hook_candidate_id', 'selected_thumbnail_concept_id', 'hook_session_id', 'approved_by']) {
     const value = row[field];
     if (value !== undefined && value !== null && (typeof value !== 'string' || !isValidUUID(value))) {
       throw new AppError(`Invalid ${field}.`, 400, 'INVALID_UUID');

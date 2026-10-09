@@ -36,6 +36,10 @@ const names = new Set([
   'content_pack_versions',
   'hook_lab_sessions',
   'hook_candidates',
+  'thumbnail_lab_sessions',
+  'thumbnail_concepts',
+  'thumbnail_versions',
+  'autopilot_runs',
 ]);
 type Result = { data: any; error: { message: string; code?: string } | null; count?: number | null };
 type Action = 'select' | 'insert' | 'update' | 'upsert' | 'delete';
