@@ -31,6 +31,7 @@ import {
   Brain,
   Flame,
   Image as ImageIcon,
+  FlaskConical,
 } from 'lucide-react';
 import { ProducerPanel } from '../components/producer/ProducerPanel';
 import { TranslationWorkspace } from '../components/translation/TranslationWorkspace';
@@ -38,6 +39,7 @@ import { ContentPackWorkspace } from '../components/contentPack/ContentPackWorks
 import { HookLabWorkspace } from '../components/hookLab/HookLabWorkspace';
 import { ThumbnailLabWorkspace } from '../components/thumbnailLab/ThumbnailLabWorkspace';
 import { AutopilotWorkspace } from '../components/autopilot/AutopilotWorkspace';
+import { ABStudioWorkspace } from '../components/abStudio/ABStudioWorkspace';
 import { clipRenderService } from '../services/clipRenderService';
 
 import { Timeline } from '../components/editor/Timeline';
@@ -265,7 +267,7 @@ export const ClipEditorPage: React.FC = () => {
 
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio' | 'producer' | 'translate' | 'content_pack' | 'hook_lab' | 'thumbnail_lab' | 'autopilot'>('captions');
+  const [activeTab, setActiveTab] = useState<'captions' | 'layout' | 'text' | 'audio' | 'producer' | 'translate' | 'content_pack' | 'hook_lab' | 'thumbnail_lab' | 'autopilot' | 'ab_studio'>('captions');
 
   // Check URL query for default tab
   useEffect(() => {
@@ -280,6 +282,8 @@ export const ClipEditorPage: React.FC = () => {
       setActiveTab('thumbnail_lab');
     } else if (params.get('tab') === 'autopilot') {
       setActiveTab('autopilot');
+    } else if (params.get('tab') === 'ab_studio' || params.get('tab') === 'ab-studio' || params.get('tab') === 'ab') {
+      setActiveTab('ab_studio');
     }
   }, []);
 
@@ -1339,9 +1343,9 @@ export const ClipEditorPage: React.FC = () => {
           />
         </div>
       ) : (
-        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        <div className="flex-1 flex flex-col lg:flex-row overflow-hidden min-w-0">
         {/* CENTER: Video Canvas & Live CSS Overlay */}
-        <div className="flex-1 bg-neutral-950 flex flex-col items-center justify-center p-4 md:p-6 overflow-y-auto">
+        <div className="flex-1 min-w-0 bg-neutral-950 flex flex-col items-center justify-center p-4 md:p-6 overflow-y-auto">
           {/* Notifications */}
           {error && (
             <div className="mb-4 w-full max-w-md bg-red-950/50 border border-red-800 text-red-300 px-4 py-2.5 rounded-lg text-xs flex items-center gap-2">
@@ -1651,12 +1655,20 @@ export const ClipEditorPage: React.FC = () => {
         </div>
 
         {/* RIGHT / SIDEBAR: Modular Feature Tabs */}
-        <div className="w-full lg:w-96 border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-900/40 flex flex-col h-auto lg:h-full">
+        <div
+          className={`w-full ${
+            activeTab === 'ab_studio'
+              ? 'lg:w-[480px] xl:w-[620px] 2xl:w-[720px]'
+              : ['thumbnail_lab', 'autopilot', 'content_pack', 'hook_lab'].includes(activeTab)
+              ? 'lg:w-[450px] xl:w-[540px]'
+              : 'lg:w-96'
+          } border-t lg:border-t-0 lg:border-l border-neutral-800 bg-neutral-900/40 flex flex-col h-auto lg:h-full shrink-0 min-w-0 transition-all duration-150`}
+        >
           {/* Subtabs selector */}
-          <div className="flex border-b border-neutral-800 bg-neutral-900/60 p-1">
+          <div className="flex border-b border-neutral-800 bg-neutral-900/60 p-1 overflow-x-auto no-scrollbar gap-1">
             <button
               onClick={() => setActiveTab('captions')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'captions'
                   ? 'bg-neutral-800 text-white shadow'
                   : 'text-neutral-400 hover:text-neutral-200'
@@ -1668,7 +1680,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('layout')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'layout'
                   ? 'bg-neutral-800 text-white shadow'
                   : 'text-neutral-400 hover:text-neutral-200'
@@ -1680,7 +1692,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('text')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'text'
                   ? 'bg-neutral-800 text-white shadow'
                   : 'text-neutral-400 hover:text-neutral-200'
@@ -1692,7 +1704,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('audio')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'audio'
                   ? 'bg-neutral-800 text-white shadow'
                   : 'text-neutral-400 hover:text-neutral-200'
@@ -1704,7 +1716,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('producer')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'producer'
                   ? 'bg-gradient-to-r from-purple-700 to-indigo-700 text-white shadow'
                   : 'text-purple-400 hover:text-purple-200'
@@ -1716,7 +1728,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('translate')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'translate'
                   ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow'
                   : 'text-neutral-400 hover:text-neutral-200'
@@ -1728,7 +1740,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('content_pack')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'content_pack'
                   ? 'bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow'
                   : 'text-neutral-400 hover:text-neutral-200'
@@ -1740,7 +1752,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('hook_lab')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'hook_lab'
                   ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow'
                   : 'text-amber-400 hover:text-amber-200'
@@ -1752,7 +1764,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('thumbnail_lab')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'thumbnail_lab'
                   ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white shadow'
                   : 'text-rose-400 hover:text-rose-200'
@@ -1764,7 +1776,7 @@ export const ClipEditorPage: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('autopilot')}
-              className={`flex-1 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition ${
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
                 activeTab === 'autopilot'
                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow'
                   : 'text-purple-400 hover:text-purple-200'
@@ -1773,11 +1785,29 @@ export const ClipEditorPage: React.FC = () => {
               <Sparkles className="w-3.5 h-3.5 text-purple-400" />
               Autopilot
             </button>
+
+            <button
+              onClick={() => setActiveTab('ab_studio')}
+              className={`shrink-0 px-2.5 py-2 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition whitespace-nowrap ${
+                activeTab === 'ab_studio'
+                  ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow'
+                  : 'text-orange-400 hover:text-orange-200'
+              }`}
+            >
+              <FlaskConical className="w-3.5 h-3.5 text-orange-400" />
+              A/B Studio
+            </button>
           </div>
 
 
           {/* Tab Content Panels */}
-          <div className="p-4 md:p-6 overflow-y-auto flex-1 space-y-6">
+          <div
+            className={`flex-1 min-w-0 ${
+              activeTab === 'ab_studio'
+                ? 'p-0 overflow-hidden flex flex-col'
+                : 'p-4 md:p-6 overflow-y-auto space-y-6'
+            }`}
+          >
             {/* 1. ADVANCED CAPTIONS TAB */}
             {activeTab === 'captions' && (
               <div className="space-y-5">
@@ -2881,6 +2911,18 @@ export const ClipEditorPage: React.FC = () => {
             {activeTab === 'autopilot' && clip && (
               <div className="flex-1 overflow-hidden h-full">
                 <AutopilotWorkspace
+                  clipId={clip.id}
+                  projectId={clip.project_id}
+                  clipTitle={clip.title || 'Clip'}
+                  clipDurationSeconds={clip.duration_seconds}
+                />
+              </div>
+            )}
+
+            {/* 11. A/B STUDIO TAB (PHASE 27) */}
+            {activeTab === 'ab_studio' && clip && (
+              <div className="flex-1 overflow-hidden h-full">
+                <ABStudioWorkspace
                   clipId={clip.id}
                   projectId={clip.project_id}
                   clipTitle={clip.title || 'Clip'}

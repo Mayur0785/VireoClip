@@ -24,6 +24,7 @@ import { HookLabService } from './hookLabService.js';
 import { ThumbnailLabService } from './thumbnailLabService.js';
 import { ThumbnailScoringService } from './thumbnailLab/thumbnailScoringService.js';
 import { ContentPackService } from './contentPackService.js';
+import { JobReliabilityService } from './queue/jobReliabilityService.js';
 
 export class AutopilotService {
   /**
@@ -80,13 +81,31 @@ export class AutopilotService {
         throw new AppError('Associated project not found or access denied.', 404, 'PROJECT_NOT_FOUND');
       }
 
+      // Duplicate delivery guard: If idempotency_key is provided, return existing pending/running run
+      if (dto.idempotency_key) {
+        const { data: existingRuns } = await dataRepository
+          .from('autopilot_runs')
+          .select('*')
+          .eq('clip_id', clipRec.id)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+
+        const activeRun = (existingRuns || []).find((r: any) =>
+          ['PENDING', 'RUNNING'].includes(r.status)
+        );
+        if (activeRun) {
+          logger.info(`[Autopilot] Idempotently returned active run for clip ${clipRec.id}`);
+          return activeRun as AutopilotRunRecord;
+        }
+      }
+
       // Default step list
       const initialSteps: AutopilotStepResult[] = [
-        { step: 'PRODUCER', status: 'PENDING', retry_eligible: true },
-        { step: 'HOOK_LAB', status: 'PENDING', retry_eligible: true },
-        { step: 'THUMBNAIL_LAB', status: 'PENDING', retry_eligible: true },
-        { step: 'CONTENT_PACK', status: 'PENDING', retry_eligible: true },
-        { step: 'APPROVAL', status: 'PENDING', retry_eligible: false },
+        { step: 'PRODUCER', status: 'PENDING', retry_eligible: true, attempts: 0, max_attempts: 3 },
+        { step: 'HOOK_LAB', status: 'PENDING', retry_eligible: true, attempts: 0, max_attempts: 3 },
+        { step: 'THUMBNAIL_LAB', status: 'PENDING', retry_eligible: true, attempts: 0, max_attempts: 3 },
+        { step: 'CONTENT_PACK', status: 'PENDING', retry_eligible: true, attempts: 0, max_attempts: 3 },
+        { step: 'APPROVAL', status: 'PENDING', retry_eligible: false, attempts: 0, max_attempts: 1 },
       ];
 
       const now = new Date();
@@ -103,6 +122,9 @@ export class AutopilotService {
           auto_select_highest_scoring_thumbnail: true,
         },
         steps: initialSteps,
+        attempts: 0,
+        max_attempts: 3,
+        requires_manual_intervention: false,
         is_approved: false,
         created_at: now,
         updated_at: now,
@@ -254,23 +276,31 @@ export class AutopilotService {
           return run;
         }
 
-        run = await this.updateRunState(userId, runId, { status: 'RUNNING' });
+        run = await this.updateRunState(userId, runId, { status: 'RUNNING' }, lockToken);
 
         // Step 1: Producer
-        run = await this.executeProducerStep(userId, run);
+        run = await this.executeProducerStep(userId, run, lockToken);
         if (run.status === 'FAILED' || run.status === 'BLOCKED') return run;
 
         // Step 2: Hook Lab
-        run = await this.executeHookLabStep(userId, run);
+        run = await this.executeHookLabStep(userId, run, lockToken);
         if (run.status === 'FAILED' || run.status === 'BLOCKED') return run;
 
         // Step 3: Thumbnail Lab
-        run = await this.executeThumbnailLabStep(userId, run);
+        run = await this.executeThumbnailLabStep(userId, run, lockToken);
         if (run.status === 'FAILED' || run.status === 'BLOCKED') return run;
 
         // Step 4: Content Pack
-        run = await this.executeContentPackStep(userId, run);
+        run = await this.executeContentPackStep(userId, run, lockToken);
         if (run.status === 'FAILED' || run.status === 'BLOCKED') return run;
+
+        // Output Verification Guard: Do not mark run successful when its required outputs are missing or invalid
+        JobReliabilityService.verifyRequiredOutputs('autopilot', {
+          producer_plan_id: run.producer_plan_id,
+          selected_hook_candidate_id: run.selected_hook_candidate_id,
+          selected_thumbnail_concept_id: run.selected_thumbnail_concept_id,
+          content_pack_id: run.content_pack_id,
+        });
 
         // Step 5: Mark ready for Human Approval
         const steps = run.steps.map((s) => {
@@ -288,7 +318,7 @@ export class AutopilotService {
           status: 'COMPLETED',
           current_step: 'APPROVAL',
           steps,
-        });
+        }, lockToken);
 
         return run;
       } finally {
@@ -320,7 +350,8 @@ export class AutopilotService {
    */
   private static async executeProducerStep(
     userId: string,
-    run: AutopilotRunRecord
+    run: AutopilotRunRecord,
+    lockToken?: string
   ): Promise<AutopilotRunRecord> {
     const stepIdx = run.steps.findIndex((s) => s.step === 'PRODUCER');
     const currentStep = run.steps[stepIdx];
@@ -331,7 +362,7 @@ export class AutopilotService {
 
     const startTime = new Date();
     this.updateStepStatus(run.steps, 'PRODUCER', 'RUNNING', { started_at: startTime });
-    await this.updateRunState(userId, run.id, { current_step: 'PRODUCER', steps: run.steps });
+    await this.updateRunState(userId, run.id, { current_step: 'PRODUCER', steps: run.steps }, lockToken);
 
     try {
       // Generate plan
@@ -344,6 +375,9 @@ export class AutopilotService {
 
       // Apply non-destructive edits to clip
       await ProducerRenderService.applyPlanToClip(plan.id, userId);
+
+      // Verify required plan deliverable
+      JobReliabilityService.verifyRequiredOutputs('producer_step', { plan_id: plan.id });
 
       const endTime = new Date();
       this.updateStepStatus(run.steps, 'PRODUCER', 'COMPLETED', {
@@ -361,22 +395,32 @@ export class AutopilotService {
       return await this.updateRunState(userId, run.id, {
         producer_plan_id: plan.id,
         steps: run.steps,
-      });
+      }, lockToken);
     } catch (err: any) {
       logger.error(`[Autopilot] Producer step failed for run ${run.id}: ${err.message}`);
       const endTime = new Date();
+      const isTransient = JobReliabilityService.isTransientError(err);
+      const sanitized = JobReliabilityService.sanitizeErrorMessage(err.message || 'Producer plan generation failed.');
+      const currentStepObj = run.steps.find((s) => s.step === 'PRODUCER');
+      const stepAttempts = (currentStepObj?.attempts || 0) + 1;
+      const retryEligible = isTransient && stepAttempts < 3;
+
       this.updateStepStatus(run.steps, 'PRODUCER', 'FAILED', {
         completed_at: endTime,
         duration_ms: endTime.getTime() - startTime.getTime(),
-        error: err.message || 'Producer plan generation failed.',
-        retry_eligible: true,
+        error: sanitized,
+        retry_eligible: retryEligible,
+        attempts: stepAttempts,
+        max_attempts: 3,
       });
 
       return await this.updateRunState(userId, run.id, {
         status: 'FAILED',
-        error: `Producer failed: ${err.message}`,
+        error: `Producer failed: ${sanitized}`,
+        last_failure_reason: sanitized,
+        requires_manual_intervention: !retryEligible,
         steps: run.steps,
-      });
+      }, lockToken);
     }
   }
 
@@ -385,7 +429,8 @@ export class AutopilotService {
    */
   private static async executeHookLabStep(
     userId: string,
-    run: AutopilotRunRecord
+    run: AutopilotRunRecord,
+    lockToken?: string
   ): Promise<AutopilotRunRecord> {
     const stepIdx = run.steps.findIndex((s) => s.step === 'HOOK_LAB');
     const currentStep = run.steps[stepIdx];
@@ -396,7 +441,7 @@ export class AutopilotService {
 
     const startTime = new Date();
     this.updateStepStatus(run.steps, 'HOOK_LAB', 'RUNNING', { started_at: startTime });
-    await this.updateRunState(userId, run.id, { current_step: 'HOOK_LAB', steps: run.steps });
+    await this.updateRunState(userId, run.id, { current_step: 'HOOK_LAB', steps: run.steps }, lockToken);
 
     try {
       // Create or get session
@@ -427,6 +472,9 @@ export class AutopilotService {
         status: 'APPROVED',
       });
 
+      // Verify required hook candidate deliverable
+      JobReliabilityService.verifyRequiredOutputs('hook_lab_step', { candidate_id: chosen.id });
+
       const rationale = locked
         ? `Preserved locked hook: "${chosen.text.slice(0, 50)}..."`
         : `Selected highest overall hook fit (${chosen.overall_hook_fit}/100) for ${chosen.hook_type} hook: "${chosen.text.slice(0, 50)}..."`;
@@ -450,22 +498,32 @@ export class AutopilotService {
         selected_hook_candidate_id: chosen.id,
         hook_selection_rationale: rationale,
         steps: run.steps,
-      });
+      }, lockToken);
     } catch (err: any) {
       logger.error(`[Autopilot] Hook Lab step failed for run ${run.id}: ${err.message}`);
       const endTime = new Date();
+      const isTransient = JobReliabilityService.isTransientError(err);
+      const sanitized = JobReliabilityService.sanitizeErrorMessage(err.message || 'Hook Lab generation failed.');
+      const currentStepObj = run.steps.find((s) => s.step === 'HOOK_LAB');
+      const stepAttempts = (currentStepObj?.attempts || 0) + 1;
+      const retryEligible = isTransient && stepAttempts < 3;
+
       this.updateStepStatus(run.steps, 'HOOK_LAB', 'FAILED', {
         completed_at: endTime,
         duration_ms: endTime.getTime() - startTime.getTime(),
-        error: err.message || 'Hook Lab generation failed.',
-        retry_eligible: true,
+        error: sanitized,
+        retry_eligible: retryEligible,
+        attempts: stepAttempts,
+        max_attempts: 3,
       });
 
       return await this.updateRunState(userId, run.id, {
         status: 'FAILED',
-        error: `Hook Lab failed: ${err.message}`,
+        error: `Hook Lab failed: ${sanitized}`,
+        last_failure_reason: sanitized,
+        requires_manual_intervention: !retryEligible,
         steps: run.steps,
-      });
+      }, lockToken);
     }
   }
 
@@ -475,7 +533,8 @@ export class AutopilotService {
    */
   private static async executeThumbnailLabStep(
     userId: string,
-    run: AutopilotRunRecord
+    run: AutopilotRunRecord,
+    lockToken?: string
   ): Promise<AutopilotRunRecord> {
     const stepIdx = run.steps.findIndex((s) => s.step === 'THUMBNAIL_LAB');
     const currentStep = run.steps[stepIdx];
@@ -486,7 +545,7 @@ export class AutopilotService {
 
     const startTime = new Date();
     this.updateStepStatus(run.steps, 'THUMBNAIL_LAB', 'RUNNING', { started_at: startTime });
-    await this.updateRunState(userId, run.id, { current_step: 'THUMBNAIL_LAB', steps: run.steps });
+    await this.updateRunState(userId, run.id, { current_step: 'THUMBNAIL_LAB', steps: run.steps }, lockToken);
 
     try {
       // Create session
@@ -534,6 +593,9 @@ export class AutopilotService {
       // Approve concept in ThumbnailLabService
       const { concept: approvedConcept } = await ThumbnailLabService.approveConcept(session.id, selectedConcept.id, userId);
 
+      // Verify required thumbnail deliverable
+      JobReliabilityService.verifyRequiredOutputs('thumbnail_step', { concept_id: approvedConcept.id });
+
       const finalScore = approvedConcept.diagnostics?.overall_score ?? selectedConcept.diagnostics?.overall_score;
 
       const endTime = new Date();
@@ -558,22 +620,32 @@ export class AutopilotService {
         thumbnail_selection_rationale: selectionRationale,
         thumbnail_score: finalScore,
         steps: run.steps,
-      });
+      }, lockToken);
     } catch (err: any) {
       logger.error(`[Autopilot] Thumbnail Lab step failed for run ${run.id}: ${err.message}`);
       const endTime = new Date();
+      const isTransient = JobReliabilityService.isTransientError(err);
+      const sanitized = JobReliabilityService.sanitizeErrorMessage(err.message || 'Thumbnail Lab concept generation failed.');
+      const currentStepObj = run.steps.find((s) => s.step === 'THUMBNAIL_LAB');
+      const stepAttempts = (currentStepObj?.attempts || 0) + 1;
+      const retryEligible = isTransient && stepAttempts < 3;
+
       this.updateStepStatus(run.steps, 'THUMBNAIL_LAB', 'FAILED', {
         completed_at: endTime,
         duration_ms: endTime.getTime() - startTime.getTime(),
-        error: err.message || 'Thumbnail Lab concept generation failed.',
-        retry_eligible: true,
+        error: sanitized,
+        retry_eligible: retryEligible,
+        attempts: stepAttempts,
+        max_attempts: 3,
       });
 
       return await this.updateRunState(userId, run.id, {
         status: 'FAILED',
-        error: `Thumbnail Lab failed: ${err.message}`,
+        error: `Thumbnail Lab failed: ${sanitized}`,
+        last_failure_reason: sanitized,
+        requires_manual_intervention: !retryEligible,
         steps: run.steps,
-      });
+      }, lockToken);
     }
   }
 
@@ -583,7 +655,8 @@ export class AutopilotService {
    */
   private static async executeContentPackStep(
     userId: string,
-    run: AutopilotRunRecord
+    run: AutopilotRunRecord,
+    lockToken?: string
   ): Promise<AutopilotRunRecord> {
     const stepIdx = run.steps.findIndex((s) => s.step === 'CONTENT_PACK');
     const currentStep = run.steps[stepIdx];
@@ -594,7 +667,7 @@ export class AutopilotService {
 
     const startTime = new Date();
     this.updateStepStatus(run.steps, 'CONTENT_PACK', 'RUNNING', { started_at: startTime });
-    await this.updateRunState(userId, run.id, { current_step: 'CONTENT_PACK', steps: run.steps });
+    await this.updateRunState(userId, run.id, { current_step: 'CONTENT_PACK', steps: run.steps }, lockToken);
 
     try {
       const pack = await ContentPackService.generateContentPack({
@@ -606,6 +679,9 @@ export class AutopilotService {
         userInstruction: run.settings.user_instruction,
         brandBrainId: run.settings.brand_brain_id,
       });
+
+      // Verify required content pack deliverable
+      JobReliabilityService.verifyRequiredOutputs('content_pack_step', { content_pack_id: pack.id });
 
       const itemCount = pack.items ? pack.items.length : 0;
       const endTime = new Date();
@@ -624,22 +700,32 @@ export class AutopilotService {
       return await this.updateRunState(userId, run.id, {
         content_pack_id: pack.id,
         steps: run.steps,
-      });
+      }, lockToken);
     } catch (err: any) {
       logger.error(`[Autopilot] Content Pack step failed for run ${run.id}: ${err.message}`);
       const endTime = new Date();
+      const isTransient = JobReliabilityService.isTransientError(err);
+      const sanitized = JobReliabilityService.sanitizeErrorMessage(err.message || 'Content Pack assembly failed.');
+      const currentStepObj = run.steps.find((s) => s.step === 'CONTENT_PACK');
+      const stepAttempts = (currentStepObj?.attempts || 0) + 1;
+      const retryEligible = isTransient && stepAttempts < 3;
+
       this.updateStepStatus(run.steps, 'CONTENT_PACK', 'FAILED', {
         completed_at: endTime,
         duration_ms: endTime.getTime() - startTime.getTime(),
-        error: err.message || 'Content Pack assembly failed.',
-        retry_eligible: true,
+        error: sanitized,
+        retry_eligible: retryEligible,
+        attempts: stepAttempts,
+        max_attempts: 3,
       });
 
       return await this.updateRunState(userId, run.id, {
         status: 'FAILED',
-        error: `Content Pack failed: ${err.message}`,
+        error: `Content Pack failed: ${sanitized}`,
+        last_failure_reason: sanitized,
+        requires_manual_intervention: !retryEligible,
         steps: run.steps,
-      });
+      }, lockToken);
     }
   }
 
@@ -685,17 +771,48 @@ export class AutopilotService {
         );
       }
 
+      if (!forceRerun && target.status === 'FAILED' && target.retry_eligible === false) {
+        throw new AppError(
+          `Step ${stepName} encountered a permanent error and is not retryable without manual forceRerun.`,
+          400,
+          'PERMANENT_ERROR_NOT_RETRYABLE'
+        );
+      }
+
+      const nextAttempt = (target.attempts || 0) + 1;
+      const maxAttempts = target.max_attempts || 3;
+      if (!forceRerun && nextAttempt > maxAttempts) {
+        throw new AppError(
+          `Step ${stepName} has exceeded maximum retry attempts (${maxAttempts}). Manual intervention required.`,
+          400,
+          'MAX_RETRIES_EXCEEDED'
+        );
+      }
+
+      // Calculate backoff with jitter
+      const backoffDelay = JobReliabilityService.computeBackoffDelayMs(nextAttempt, {
+        baseDelayMs: 1000,
+        maxDelayMs: 30000,
+      });
+      const nextRetryAt = new Date(Date.now() + backoffDelay);
+
       // Reset target step
       target.status = 'PENDING';
       target.error = undefined;
       target.output_id = undefined;
       target.output_summary = undefined;
       target.artifacts = undefined;
+      target.attempts = nextAttempt;
+      target.max_attempts = maxAttempts;
+      target.next_retry_at = nextRetryAt;
+      target.retry_eligible = true;
 
       const updates: Partial<AutopilotRunRecord> = {
         status: 'RUNNING',
         error: undefined,
         current_step: stepName,
+        attempts: Math.max(run.attempts || 0, nextAttempt),
+        next_retry_at: nextRetryAt,
       };
 
       // Invalidate stage-specific outputs and cascade down the dependency graph
@@ -886,11 +1003,19 @@ export class AutopilotService {
     }
   }
 
-  private static async updateRunState(
+  public static async updateRunState(
     userId: string,
     runId: string,
-    updates: Partial<AutopilotRunRecord>
+    updates: Partial<AutopilotRunRecord>,
+    expectedLockToken?: string
   ): Promise<AutopilotRunRecord> {
+    const current = await this.getRun(userId, runId);
+
+    // Validate state machine transition if status is changing
+    if (updates.status && updates.status !== current.status) {
+      JobReliabilityService.validateStateTransition('autopilot', current.status, updates.status);
+    }
+
     const now = new Date();
     const setDoc: Record<string, any> = { updated_at: now };
     const unsetDoc: Record<string, string> = {};
@@ -908,11 +1033,24 @@ export class AutopilotService {
       updateOps.$unset = unsetDoc;
     }
 
+    const filter: any = { id: runId, user_id: userId };
+    if (expectedLockToken) {
+      filter.execution_lock = expectedLockToken;
+    }
+
     const db = await getMongoDb();
-    await db.collection('autopilot_runs').updateOne(
-      { id: runId, user_id: userId },
+    const updateResult = await db.collection('autopilot_runs').updateOne(
+      filter,
       updateOps
     );
+
+    if (expectedLockToken && updateResult.matchedCount === 0) {
+      throw new AppError(
+        'Execution lock expired or stolen by newer worker.',
+        409,
+        'LOCK_LOST'
+      );
+    }
 
     return await this.getRun(userId, runId);
   }

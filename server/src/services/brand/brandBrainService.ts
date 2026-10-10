@@ -11,6 +11,9 @@ import {
   BRAND_RESOURCE_LIMITS,
   SAFE_EDITOR_FONTS,
   SafeEditorFont,
+  PlatformContentGuidance,
+  BrandContentPillar,
+  BrandApprovedTerm,
 } from '../../types/index.js';
 
 export interface UpdateBrandBrainDTO {
@@ -24,6 +27,8 @@ export interface UpdateBrandBrainDTO {
   audio?: Partial<BrandBrainProfile['audio']>;
   publishing?: Partial<BrandBrainProfile['publishing']>;
   translation?: Partial<BrandBrainProfile['translation']>;
+  platform_guidance?: Record<string, PlatformContentGuidance>;
+  evidence_references?: string[];
   locks?: Record<string, boolean>;
   rule_states?: Record<string, RuleState>;
 }
@@ -98,6 +103,15 @@ export class BrandBrainService {
         description: '',
         industry: 'General',
         website_url: '',
+        target_audience: '',
+        audience_needs: [],
+        audience_pain_points: [],
+        target_demographics: '',
+        core_messaging: '',
+        positioning_statement: '',
+        value_propositions: [],
+        brand_mission: '',
+        content_pillars: [],
       },
       voice: {
         tones: ['conversational', 'engaging'],
@@ -108,6 +122,10 @@ export class BrandBrainService {
         humor_level: 'subtle',
         sentence_length_preference: 'medium',
         emoji_policy: 'minimal',
+        voice_summary: '',
+        approved_terminology: [],
+        forbidden_claims: [],
+        styles_to_avoid: [],
       },
       visual: {
         primary_colors: ['#0A0A0A', '#3B82F6'],
@@ -173,6 +191,37 @@ export class BrandBrainService {
       translation: {
         tone_preservation_mode: 'adaptive',
       },
+      platform_guidance: {
+        tiktok: {
+          tone: 'casual',
+          best_practices: ['Hook within 2s', 'Vertical 9:16 framing', 'Fast pacing'],
+          preferred_format: '9:16 vertical',
+          cta_style: 'FOLLOW',
+          max_duration_seconds: 60,
+        },
+        youtube_shorts: {
+          tone: 'engaging',
+          best_practices: ['Strong visual premise', 'Seamless replay loop'],
+          preferred_format: '9:16 vertical',
+          cta_style: 'SOFT',
+          max_duration_seconds: 60,
+        },
+        instagram: {
+          tone: 'conversational',
+          best_practices: ['High aesthetic fidelity', 'Save-triggering insight'],
+          preferred_format: '9:16 vertical',
+          cta_style: 'SAVE',
+          max_duration_seconds: 90,
+        },
+        linkedin: {
+          tone: 'professional',
+          best_practices: ['Actionable career/industry takeaway', 'Clear thesis'],
+          preferred_format: '9:16 or 1:1',
+          cta_style: 'COMMENT',
+          max_duration_seconds: 120,
+        },
+      },
+      evidence_references: [],
       locks: {
         'captions.font': false,
         'captions.default_style': false,
@@ -280,7 +329,7 @@ export class BrandBrainService {
   public static async updateProfile(
     userId: string,
     updates: UpdateBrandBrainDTO,
-    source: 'USER_EDIT' | 'LEARNED_UPDATE' | 'IMPORT' = 'USER_EDIT',
+    source: 'USER_EDIT' | 'LEARNED_UPDATE' | 'IMPORT' | 'INTELLIGENCE_APPROVAL' = 'USER_EDIT',
     brandBrainId?: string
   ): Promise<BrandBrainProfile> {
     if (!userId) {
@@ -333,7 +382,14 @@ export class BrandBrainService {
         ...current,
         version: newVersionNum,
         updated_at: new Date().toISOString(),
-        identity: { ...current.identity, ...(updates.identity || {}) },
+        identity: {
+          ...current.identity,
+          ...(updates.identity || {}),
+          audience_needs: (updates.identity?.audience_needs || current.identity.audience_needs || []).slice(0, 15),
+          audience_pain_points: (updates.identity?.audience_pain_points || current.identity.audience_pain_points || []).slice(0, 15),
+          value_propositions: (updates.identity?.value_propositions || current.identity.value_propositions || []).slice(0, 15),
+          content_pillars: (updates.identity?.content_pillars || current.identity.content_pillars || []).slice(0, 10),
+        },
         voice: {
           ...current.voice,
           ...(updates.voice || {}),
@@ -345,6 +401,9 @@ export class BrandBrainService {
             0,
             BRAND_RESOURCE_LIMITS.MAX_AVOID_PHRASES
           ),
+          approved_terminology: (updates.voice?.approved_terminology || current.voice.approved_terminology || []).slice(0, 30),
+          forbidden_claims: (updates.voice?.forbidden_claims || current.voice.forbidden_claims || []).slice(0, 30),
+          styles_to_avoid: (updates.voice?.styles_to_avoid || current.voice.styles_to_avoid || []).slice(0, 15),
         },
         visual: {
           ...current.visual,
@@ -379,6 +438,11 @@ export class BrandBrainService {
         audio: { ...current.audio, ...(updates.audio || {}) },
         publishing: { ...current.publishing, ...(updates.publishing || {}) },
         translation: { ...current.translation, ...(updates.translation || {}) },
+        platform_guidance: {
+          ...(current.platform_guidance || {}),
+          ...(updates.platform_guidance || {}),
+        },
+        evidence_references: updates.evidence_references || current.evidence_references || [],
         locks: { ...current.locks, ...(updates.locks || {}) },
         rule_states: {
           ...current.rule_states,

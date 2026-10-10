@@ -16,7 +16,9 @@ export type BrandTaskType =
   | 'PUBLISH'
   | 'TRANSLATION'
   | 'BROLL'
-  | 'AUDIO';
+  | 'AUDIO'
+  | 'CONTENT_PACK'
+  | 'AUTOPILOT';
 
 
 export interface GetBrandContextOptions {
@@ -235,6 +237,7 @@ export class BrandContextService {
           writing_styles: profile.voice.writing_styles,
           preferred_phrasing: this.sanitizeStringArray(profile.voice.preferred_phrasing),
           avoid_phrasing: this.sanitizeStringArray(profile.voice.avoid_phrasing),
+          forbidden_claims: this.sanitizeStringArray(profile.voice.forbidden_claims || []),
         };
 
         baseContext.hooks = {
@@ -243,7 +246,88 @@ export class BrandContextService {
           banned_patterns: this.sanitizeStringArray(profile.hooks.banned_patterns),
           example_hooks: this.sanitizeStringArray(profile.hooks.example_hooks),
         };
-        rulesApplied.push('Hook DNA and Creator Voice active');
+
+        // Phase 34 Intelligence fields
+        if (profile.identity.target_audience) {
+          baseContext.target_audience = this.sanitizePromptData(profile.identity.target_audience);
+        }
+        if (profile.identity.audience_needs?.length) {
+          baseContext.audience_needs = this.sanitizeStringArray(profile.identity.audience_needs);
+        }
+        if (profile.identity.content_pillars?.length) {
+          baseContext.content_pillars = profile.identity.content_pillars;
+        }
+        if (profile.voice.forbidden_claims?.length) {
+          baseContext.forbidden_claims = this.sanitizeStringArray(profile.voice.forbidden_claims);
+        }
+
+        rulesApplied.push('Hook DNA, Creator Voice, and Audience Intelligence active');
+        break;
+      }
+
+      case 'THUMBNAIL_LAB': {
+        baseContext.visual = {
+          primary_colors: profile.visual.primary_colors,
+          secondary_colors: profile.visual.secondary_colors,
+          accent_colors: profile.visual.accent_colors,
+          background_color: profile.visual.background_color,
+          text_color: profile.visual.text_color,
+          fonts: profile.visual.fonts,
+          logo_asset_ids: profile.visual.logo_asset_ids,
+        };
+        if (profile.identity.target_audience) {
+          baseContext.target_audience = this.sanitizePromptData(profile.identity.target_audience);
+        }
+        if (profile.identity.core_messaging) {
+          baseContext.core_messaging = this.sanitizePromptData(profile.identity.core_messaging);
+        }
+        if (profile.identity.content_pillars?.length) {
+          baseContext.content_pillars = profile.identity.content_pillars;
+        }
+        rulesApplied.push('Visual guidelines, palette, fonts, and audience targeting applied to Thumbnail Lab');
+        break;
+      }
+
+      case 'CONTENT_PACK': {
+        baseContext.identity = {
+          brand_name: this.sanitizePromptData(profile.identity.brand_name),
+          industry: this.sanitizePromptData(profile.identity.industry || ''),
+          target_audience: this.sanitizePromptData(profile.identity.target_audience || ''),
+          core_messaging: this.sanitizePromptData(profile.identity.core_messaging || ''),
+          positioning_statement: this.sanitizePromptData(profile.identity.positioning_statement || ''),
+        };
+        baseContext.voice = {
+          tones: profile.voice.tones,
+          writing_styles: profile.voice.writing_styles,
+          preferred_phrasing: this.sanitizeStringArray(profile.voice.preferred_phrasing),
+          avoid_phrasing: this.sanitizeStringArray(profile.voice.avoid_phrasing),
+          forbidden_claims: this.sanitizeStringArray(profile.voice.forbidden_claims || []),
+        };
+        baseContext.publishing = profile.publishing;
+        baseContext.target_audience = this.sanitizePromptData(profile.identity.target_audience || '');
+        baseContext.audience_needs = this.sanitizeStringArray(profile.identity.audience_needs || []);
+        baseContext.core_messaging = this.sanitizePromptData(profile.identity.core_messaging || '');
+        baseContext.positioning_statement = this.sanitizePromptData(profile.identity.positioning_statement || '');
+        baseContext.content_pillars = profile.identity.content_pillars;
+        baseContext.approved_terminology = profile.voice.approved_terminology;
+        baseContext.forbidden_claims = this.sanitizeStringArray(profile.voice.forbidden_claims || []);
+        rulesApplied.push('Content Pack Brand Intelligence (Audience, Core Messaging, Pillars, Terminology) applied');
+        break;
+      }
+
+      case 'AUTOPILOT': {
+        baseContext.identity = profile.identity;
+        baseContext.voice = profile.voice;
+        baseContext.visual = profile.visual;
+        baseContext.editing = profile.editing;
+        baseContext.audio = profile.audio;
+        baseContext.cta = profile.cta;
+        baseContext.target_audience = this.sanitizePromptData(profile.identity.target_audience || '');
+        baseContext.core_messaging = this.sanitizePromptData(profile.identity.core_messaging || '');
+        baseContext.positioning_statement = this.sanitizePromptData(profile.identity.positioning_statement || '');
+        baseContext.content_pillars = profile.identity.content_pillars;
+        baseContext.forbidden_claims = this.sanitizeStringArray(profile.voice.forbidden_claims || []);
+        rulesApplied.push('Autopilot full brand intelligence pipeline guidance active');
         break;
       }
 
@@ -313,6 +397,10 @@ export class BrandContextService {
         rulesApplied.push('Target LUFS and cleanup presets applied');
         break;
       }
+    }
+
+    if (profile.platform_guidance) {
+      baseContext.platform_guidance = profile.platform_guidance;
     }
 
     return baseContext;

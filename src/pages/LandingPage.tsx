@@ -535,8 +535,8 @@ function Pricing() {
             </h2>
           </div>
           <p>
-            Starter is available now. Pro and Team are planned; billing is not
-            live.
+            Free tier with 15 processing minutes is available immediately upon signup.
+            Paid tiers (Creator, Pro, Studio) are configured in-app; live payment checkout is currently undergoing sandbox verification prior to public commercial release.
           </p>
         </div>
         <div className="lv-pricing-grid lv-reveal-group">
@@ -547,9 +547,16 @@ function Pricing() {
             >
               <div className="lv-plan-top">
                 <h3>{plan.name}</h3>
-                {plan.name === "Pro" && <span>FOR GROWING CREATORS</span>}
+                {plan.badge && <span>{plan.badge}</span>}
               </div>
-              <strong>{plan.price}</strong>
+              <strong>
+                {plan.price}
+                {plan.period && (
+                  <span className="text-xs font-sans font-normal text-muted-foreground ml-1.5">
+                    {plan.period}
+                  </span>
+                )}
+              </strong>
               <p>{plan.description}</p>
               <ul>
                 {plan.features.map((feature) => (
@@ -562,7 +569,9 @@ function Pricing() {
               {plan.available ? (
                 <Cta className="lv-plan-cta" />
               ) : (
-                <span className="lv-plan-unavailable">Coming soon</span>
+                <span className="lv-plan-unavailable px-2 text-center text-[11px] leading-tight" title="Live payment gateway verification in progress">
+                  {plan.statusNote}
+                </span>
               )}
             </div>
           ))}

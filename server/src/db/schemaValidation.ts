@@ -89,7 +89,7 @@ const enums: Record<string, Record<string, readonly string[]>> = {
     status: ['active', 'archived'],
   },
   brand_evidence: {
-    source_type: ['USER_SETTING', 'APPROVED_EDIT', 'CREATOR_PROFILE', 'PROJECT', 'PUBLISHED_CONTENT', 'ANALYTICS', 'TRANSLATION_GLOSSARY', 'BRAND_ASSET', 'HOOK_LAB'],
+    source_type: ['USER_SETTING', 'APPROVED_EDIT', 'CREATOR_PROFILE', 'PROJECT', 'PUBLISHED_CONTENT', 'ANALYTICS', 'TRANSLATION_GLOSSARY', 'BRAND_ASSET', 'HOOK_LAB', 'AB_STUDIO'],
     confidence: ['LOW', 'MEDIUM', 'HIGH'],
   },
   content_packs: {
@@ -134,6 +134,31 @@ const enums: Record<string, Record<string, readonly string[]>> = {
     status: ['PENDING', 'RUNNING', 'COMPLETED', 'FAILED', 'BLOCKED', 'CANCELLED', 'APPROVED'],
     current_step: ['PRODUCER', 'HOOK_LAB', 'THUMBNAIL_LAB', 'CONTENT_PACK', 'APPROVAL'],
   },
+  ab_experiments: {
+    test_type: ['THUMBNAIL_ONLY', 'TITLE_ONLY', 'HOOK_LINE'],
+    target_metric: ['CTR', 'RETENTION_RATE', 'ENGAGEMENT_RATE'],
+    status: ['DRAFT', 'ACTIVE', 'PAUSED', 'CONCLUDED', 'CANCELLED'],
+    traffic_strategy: ['EQUAL_SPLIT', 'CUSTOM_WEIGHTED'],
+  },
+  ab_observation_logs: {
+    data_provenance: ['MANUAL_ENTRY', 'CSV_IMPORT', 'PLATFORM_ANALYTICS_SYNC'],
+    metric_type: ['CTR', 'RETENTION_RATE', 'ENGAGEMENT_RATE'],
+  },
+  brand_recommendations: {
+    status: ['PROPOSED', 'APPROVED', 'DISMISSED'],
+    source: ['USER_PROVIDED', 'AI_DERIVED', 'EVIDENCE_LEARNED'],
+    confidence: ['LOW', 'MEDIUM', 'HIGH'],
+  },
+  content_workflows: {
+    current_state: ['PLANNED', 'IN_PREPARATION', 'READY_FOR_REVIEW', 'AWAITING_APPROVAL', 'APPROVED', 'PUBLISHED'],
+  },
+  workspace_members: {
+    role: ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'],
+  },
+  workspace_invitations: {
+    role: ['OWNER', 'ADMIN', 'EDITOR', 'VIEWER'],
+    status: ['pending', 'accepted', 'declined', 'revoked', 'expired'],
+  },
 };
 const numericFields = new Set([
   'duration_seconds', 'start_seconds', 'end_seconds', 'engagement_score',
@@ -152,23 +177,25 @@ const numericFields = new Set([
   'weight', 'loudness_target_lufs', 'music_level', 'stroke_width', 'position_y',
   'variant_index', 'brand_brain_version', 'overall_hook_fit', 'reference_frame_timestamp',
   'thumbnail_score', 'duration_ms', 'target_duration',
+  'exposures', 'conversions', 'confidence_threshold', 'statistical_power',
+  'minimum_detectable_effect', 'baseline_conversion_rate', 'minimum_practical_lift', 'minimum_sample_size',
 ]);
 const arrayFields = new Set([
   'segments', 'words', 'raw_samples', 'smoothed_keyframes', 'scopes', 'tags', 'hashtags', 'scene_cuts', 'silence_intervals', 'face_intervals', 'keyframes', 'reasons', 'operations', 'key_decisions', 'tracks', 'items', 'effects', 'transitions', 'opportunities', 'suggestions', 'search_queries', 'voices', 'languages', 'terms', 'locked_terms',
   'primary_colors', 'secondary_colors', 'accent_colors', 'fonts', 'logo_asset_ids', 'preferred_aspect_ratios', 'preferred_layouts', 'tones', 'writing_styles', 'preferred_phrasing', 'avoid_phrasing', 'preferred_hook_types', 'banned_patterns', 'example_hooks', 'preferred_cta_types', 'approved_phrases', 'blocked_phrases', 'emphasis_rules',
   'source_evidence', 'brand_rules_used', 'validation_warnings', 'leading_filler_words', 'issues', 'strengths', 'analysis_signals_used', 'positives', 'cautions', 'warnings',
-  'steps',
+  'steps', 'variants',
 ]);
 const objectFields = new Set([
   'metadata', 'crop_config', 'overlay_config', 'caption_config', 'caption_overrides', 'payload', 'platform_custom', 'timeline', 'summary_metadata', 'platform_suitability', 'scores', 'explanation', 'parameters', 'canvas', 'settings', 'transform', 'speed', 'audio', 'text', 'caption', 'color', 'filter', 'mask', 'chroma_key', 'density_rules', 'density_summary', 'applied_item', 'analysis', 'ducking', 'enhancement', 'stats', 'timing_adjustment',
   'identity', 'voice', 'visual', 'captions', 'hooks', 'cta', 'editing', 'publishing', 'translation', 'locks', 'rule_states', 'learning', 'snapshot', 'watermark_config', 'platform_preferences', 'confidence_by_dimension', 'preferred_clip_length_range', 'value',
   'item_counts', 'opening_window', 'multimodal_signals', 'reorder_plan', 'trim_plan', 'text_overlay_plan',
   'text_layer', 'composition', 'diagnostics', 'score_breakdown',
-  'publishing_handoff', 'artifacts',
+  'publishing_handoff', 'artifacts', 'observations',
 ]);
 
 export function validateRecord(name: string, row: Record<string, unknown>): void {
-  for (const field of ['id', 'user_id', 'project_id', 'clip_id', 'candidate_id', 'parent_plan_id', 'producer_plan_id', 'editor_project_id', 'source_asset_id', 'translation_project_id', 'brand_brain_id', 'watermark_asset_id', 'content_pack_id', 'content_pack_item_id', 'hook_lab_session_id', 'thumbnail_session_id', 'concept_id', 'reference_frame_id', 'active_concept_id', 'approved_concept_id', 'selected_hook_candidate_id', 'selected_thumbnail_concept_id', 'hook_session_id', 'approved_by']) {
+  for (const field of ['id', 'user_id', 'workspace_id', 'inviter_user_id', 'project_id', 'clip_id', 'candidate_id', 'parent_plan_id', 'producer_plan_id', 'editor_project_id', 'source_asset_id', 'translation_project_id', 'brand_brain_id', 'watermark_asset_id', 'content_pack_id', 'content_pack_item_id', 'hook_lab_session_id', 'thumbnail_session_id', 'concept_id', 'reference_frame_id', 'active_concept_id', 'approved_concept_id', 'selected_hook_candidate_id', 'selected_thumbnail_concept_id', 'hook_session_id', 'approved_by', 'experiment_id', 'variant_id', 'winning_variant_id', 'thumbnail_concept_id', 'hook_candidate_id', 'brand_brain_evidence_id']) {
     const value = row[field];
     if (value !== undefined && value !== null && (typeof value !== 'string' || !isValidUUID(value))) {
       throw new AppError(`Invalid ${field}.`, 400, 'INVALID_UUID');

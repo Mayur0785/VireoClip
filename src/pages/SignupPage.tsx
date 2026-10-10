@@ -180,7 +180,17 @@ export const SignupPage: React.FC = () => {
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
           />
-          <span>I agree to create a Vireo account and receive service messages related to it.</span>
+          <span>
+            I agree to the{' '}
+            <Link to="/terms" target="_blank" className="font-medium text-foreground underline hover:text-clay">
+              Terms of Service
+            </Link>{' '}
+            and acknowledge the{' '}
+            <Link to="/privacy" target="_blank" className="font-medium text-foreground underline hover:text-clay">
+              Privacy Policy
+            </Link>
+            .
+          </span>
         </label>
 
         <Button

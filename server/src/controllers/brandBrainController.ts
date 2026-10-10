@@ -209,6 +209,44 @@ export class BrandBrainController {
   }
 
   /**
+   * POST /api/brand-brain/recommendations/:id/approve
+   */
+  public static async approveRecommendation(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = BrandBrainController.getUserId(req);
+      const { id } = req.params;
+      const { confirm_overwrite, edited_value, brand_id } = req.body;
+
+      const result = await BrandRecommendationService.approveRecommendation(
+        userId,
+        id,
+        { confirm_overwrite, edited_value, brand_brain_id: brand_id }
+      );
+
+      res.json({ success: true, ...result });
+    } catch (err: any) {
+      const status = err instanceof AppError ? err.statusCode : 500;
+      res.status(status).json({ success: false, error: err.message, code: err.code });
+    }
+  }
+
+  /**
+   * POST /api/brand-brain/recommendations/:id/dismiss
+   */
+  public static async dismissRecommendation(req: Request, res: Response): Promise<void> {
+    try {
+      const userId = BrandBrainController.getUserId(req);
+      const { id } = req.params;
+
+      const result = await BrandRecommendationService.dismissRecommendation(userId, id);
+      res.json(result);
+    } catch (err: any) {
+      const status = err instanceof AppError ? err.statusCode : 500;
+      res.status(status).json({ success: false, error: err.message, code: err.code });
+    }
+  }
+
+  /**
    * POST /api/brand-brain/apply-to-editor
    */
   public static async applyToEditor(req: Request, res: Response): Promise<void> {

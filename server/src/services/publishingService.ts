@@ -18,6 +18,7 @@ import { socialProviderRegistry } from './social/socialProviderRegistry.js';
 import { decryptToken, encryptToken } from '../utils/tokenEncryption.js';
 import { signObjectGet, downloadObjectToFile, headObject } from './objectStorageService.js';
 import { logger } from '../utils/logger.js';
+import { JobReliabilityService } from './queue/jobReliabilityService.js';
 
 const MAX_RETRY_ATTEMPTS = 3;
 const LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes stale lock recovery
@@ -373,6 +374,10 @@ export class PublishingService {
         mediaSize,
       });
 
+      if (!pubResult || !pubResult.providerPostId) {
+        throw new AppError('Publishing deliverable verification failed: provider post ID missing', 500, 'PUBLISH_VERIFICATION_FAILED');
+      }
+
       const now = new Date();
       await db.collection<PublishedPostRecord>('published_posts').updateOne(
         { id: post.id },
@@ -425,10 +430,12 @@ export class PublishingService {
     const job = await db.collection<PublishJobRecord>('publish_jobs').findOne({ id: jobId });
     const attempts = (job?.attempts || 0) + 1;
     const now = new Date();
+    const sanitizedError = JobReliabilityService.sanitizeErrorMessage(errorMessage);
+    const retryEligible = isRetryable && JobReliabilityService.isTransientError(new Error(errorMessage));
 
-    if (isRetryable && attempts < MAX_RETRY_ATTEMPTS) {
-      const backoffSeconds = Math.pow(2, attempts) * 30; // 60s, 120s, 240s
-      const nextRetryAt = new Date(now.getTime() + backoffSeconds * 1000);
+    if (retryEligible && attempts < MAX_RETRY_ATTEMPTS) {
+      const backoffDelayMs = JobReliabilityService.computeBackoffDelayMs(attempts, { baseDelayMs: 30000, maxDelayMs: 300000 });
+      const nextRetryAt = new Date(now.getTime() + backoffDelayMs);
 
       await db.collection<PublishJobRecord>('publish_jobs').updateOne(
         { id: jobId },
@@ -438,7 +445,7 @@ export class PublishingService {
             attempts,
             locked_at: null,
             next_retry_at: nextRetryAt,
-            last_error: errorMessage,
+            last_error: sanitizedError,
             updated_at: now,
           },
         }
@@ -450,7 +457,7 @@ export class PublishingService {
           $set: {
             retry_count: attempts,
             last_error_code: errorCode,
-            last_error_message: errorMessage,
+            last_error_message: sanitizedError,
             updated_at: now,
           },
         }
@@ -465,7 +472,7 @@ export class PublishingService {
             status: 'failed',
             attempts,
             locked_at: null,
-            last_error: errorMessage,
+            last_error: sanitizedError,
             updated_at: now,
           },
         }
@@ -479,13 +486,13 @@ export class PublishingService {
             failed_at: now,
             retry_count: attempts,
             last_error_code: errorCode,
-            last_error_message: errorMessage,
+            last_error_message: sanitizedError,
             updated_at: now,
           },
         }
       );
 
-      logger.error('Publishing permanently failed', { jobId, errorCode, errorMessage });
+      logger.error('Publishing permanently failed', { jobId, errorCode, errorMessage: sanitizedError });
     }
   }
 
@@ -495,6 +502,7 @@ export class PublishingService {
   async processDueJobs(): Promise<number> {
     const db = await getMongoDb();
     const now = new Date();
+    const workerId = `publish_worker_${process.pid}_${crypto.randomBytes(4).toString('hex')}`;
 
     // 1. Recover stale locks (jobs stuck in publishing > 5 minutes)
     const staleCutoff = new Date(now.getTime() - LOCK_TIMEOUT_MS);
@@ -522,6 +530,7 @@ export class PublishingService {
       {
         $set: {
           status: 'publishing',
+          worker_id: workerId,
           locked_at: now,
           started_at: now,
           updated_at: now,

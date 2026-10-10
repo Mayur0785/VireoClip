@@ -12,6 +12,7 @@ import {
   getGrowthCoach,
   getContentMemories,
   getCreatorPerformanceContext,
+  getDashboard,
 } from '../controllers/analyticsController.js';
 
 const router = Router();
@@ -19,6 +20,7 @@ const router = Router();
 // All analytics routes require verified authentication & ownership
 router.use(requireAuth);
 
+router.get('/dashboard', generalLimiter, asyncHandler(getDashboard));
 router.get('/overview', generalLimiter, asyncHandler(getOverview));
 router.get('/timeline', generalLimiter, asyncHandler(getTimeline));
 router.get('/platforms', generalLimiter, asyncHandler(getPlatformComparison));

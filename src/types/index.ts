@@ -1551,7 +1551,8 @@ export type EvidenceSourceType =
   | 'ANALYTICS'
   | 'TRANSLATION_GLOSSARY'
   | 'BRAND_ASSET'
-  | 'HOOK_LAB';
+  | 'HOOK_LAB'
+  | 'AB_STUDIO';
 
 export type BrandDimension =
   | 'identity'
@@ -1592,12 +1593,46 @@ export type CtaType =
   | 'LINK'
   | 'DM';
 
+export interface BrandContentPillar {
+  name: string;
+  description: string;
+  keywords?: string[];
+}
+
+export interface BrandApprovedTerm {
+  term: string;
+  definition?: string;
+  preferred_usage?: string;
+}
+
+export interface PlatformContentGuidance {
+  tone?: string;
+  best_practices?: string[];
+  preferred_format?: string;
+  cta_style?: string;
+  max_duration_seconds?: number;
+}
+
+export type BrandInsightStatus = 'PROPOSED' | 'APPROVED' | 'DISMISSED';
+export type BrandInsightSource = 'USER_PROVIDED' | 'AI_DERIVED' | 'EVIDENCE_LEARNED';
+export type EvidenceSufficiency = 'SUFFICIENT' | 'INSUFFICIENT' | 'ANECDOTAL';
+
 export interface BrandBrainIdentity {
   brand_name: string;
   tagline?: string;
   description?: string;
   industry?: string;
   website_url?: string;
+  // Phase 34 Intelligence Profile Fields
+  target_audience?: string;
+  audience_needs?: string[];
+  audience_pain_points?: string[];
+  target_demographics?: string;
+  core_messaging?: string;
+  positioning_statement?: string;
+  value_propositions?: string[];
+  brand_mission?: string;
+  content_pillars?: BrandContentPillar[];
 }
 
 export interface BrandBrainVoice {
@@ -1609,6 +1644,11 @@ export interface BrandBrainVoice {
   humor_level: 'none' | 'subtle' | 'high';
   sentence_length_preference: 'short' | 'medium' | 'long' | 'mixed';
   emoji_policy: 'never' | 'minimal' | 'moderate' | 'frequent';
+  // Phase 34 Intelligence Profile Fields
+  voice_summary?: string;
+  approved_terminology?: BrandApprovedTerm[];
+  forbidden_claims?: string[];
+  styles_to_avoid?: string[];
 }
 
 export interface BrandBrainVisual {
@@ -1715,6 +1755,8 @@ export interface BrandBrainProfile {
   audio: BrandBrainAudio;
   publishing: BrandBrainPublishing;
   translation: BrandBrainTranslation;
+  platform_guidance?: Record<string, PlatformContentGuidance>;
+  evidence_references?: string[];
   locks: Record<string, boolean>;
   rule_states: Record<string, RuleState>;
   learning: BrandBrainLearningSummary;
@@ -1761,6 +1803,15 @@ export interface BrandContext {
   audio?: Partial<BrandBrainAudio>;
   publishing?: Partial<BrandBrainPublishing>;
   translation?: Partial<BrandBrainTranslation>;
+  platform_guidance?: Record<string, PlatformContentGuidance>;
+  // Phase 34 Intelligence Profile Fields
+  target_audience?: string;
+  audience_needs?: string[];
+  core_messaging?: string;
+  positioning_statement?: string;
+  content_pillars?: BrandContentPillar[];
+  approved_terminology?: BrandApprovedTerm[];
+  forbidden_claims?: string[];
 }
 
 export interface BrandCheckResult {
@@ -1772,13 +1823,23 @@ export interface BrandCheckResult {
 
 export interface BrandRecommendation {
   id: string;
+  user_id?: string;
+  brand_brain_id?: string;
   dimension: BrandDimension;
+  field?: string;
   title: string;
   description: string;
   evidence: string;
+  source_snippet?: string;
+  evidence_references?: string[];
   confidence: ConfidenceLevel;
+  evidence_sufficiency?: EvidenceSufficiency;
+  source?: BrandInsightSource;
+  status?: BrandInsightStatus;
   suggested_value: any;
   current_value: any;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export const BRAND_RESOURCE_LIMITS = {
@@ -2518,7 +2579,595 @@ export interface AutopilotCapabilityModel {
   background_worker: 'SYNCHRONOUS_TASK_ORCHESTRATOR';
 }
 
+// ============================================================================
+// PHASE 27: A/B TESTING STUDIO TYPES
+// ============================================================================
 
+export type ABTestType = 'THUMBNAIL_ONLY' | 'TITLE_ONLY' | 'HOOK_LINE';
+export type ABTargetMetric = 'CTR' | 'RETENTION_RATE' | 'ENGAGEMENT_RATE';
+export type ABExperimentStatus = 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'CONCLUDED' | 'CANCELLED';
+export type ABTrafficStrategy = 'EQUAL_SPLIT' | 'CUSTOM_WEIGHTED';
+export type ABDataProvenance = 'MANUAL_ENTRY' | 'CSV_IMPORT' | 'PLATFORM_ANALYTICS_SYNC';
+export type ABVariantPerformanceStatus =
+  | 'CONTROL'
+  | 'LEADER'
+  | 'STATISTICALLY_SIGNIFICANT_WINNER'
+  | 'UNDERPERFORMING'
+  | 'INSUFFICIENT_DATA'
+  | 'INCONCLUSIVE';
+
+export interface ABObservationSummary {
+  impressions: number;
+  conversions: number; // clicks for CTR, completions for retention, engagements for engagement
+  views: number;
+  rate: number; // conversions / denominator
+  data_provenance: ABDataProvenance;
+  last_observation_at?: string;
+}
+
+export interface ABVariantStatistics {
+  conversion_rate: number;
+  standard_error: number;
+  relative_lift: number; // (p_challenger - p_control) / p_control
+  z_score: number;
+  p_value: number;
+  adjusted_alpha: number; // Bonferroni corrected alpha
+  is_statistically_significant: boolean;
+  has_practical_significance: boolean;
+  confidence_interval_95: [number, number]; // Wilson score descriptive interval [lower, upper]
+  sample_size_met: boolean;
+  success_failure_condition_met: boolean;
+}
+
+export interface ABVariant {
+  id: string;
+  variant_letter: 'A' | 'B' | 'C' | 'D';
+  is_control: boolean;
+  name: string;
+  thumbnail_concept_id?: string | null;
+  thumbnail_image_url?: string | null;
+  title?: string | null;
+  hook_candidate_id?: string | null;
+  hook_text?: string | null;
+  traffic_weight: number; // percentage (integer)
+  observations: ABObservationSummary;
+  preflight_heuristic_score?: number | null; // e.g. Thumbnail Lab 6-factor score (benchmark only, NOT used in calculations)
+  statistical_metrics?: ABVariantStatistics;
+  performance_status: ABVariantPerformanceStatus;
+}
+
+export interface ABExperiment {
+  id: string;
+  user_id: string;
+  project_id: string;
+  clip_id: string;
+  name: string;
+  hypothesis: string;
+  test_type: ABTestType;
+  target_metric: ABTargetMetric;
+  platform?: OutputPlatform;
+  status: ABExperimentStatus;
+  traffic_strategy: ABTrafficStrategy;
+  confidence_threshold: number; // e.g. 0.95
+  statistical_power: number; // e.g. 0.80
+  minimum_detectable_effect: number; // relative MDE, e.g. 0.20 (20%)
+  baseline_conversion_rate: number; // e.g. 0.05 (5%)
+  minimum_practical_lift: number; // e.g. 0.05 (5% relative lift)
+  minimum_sample_size: number; // calculated mathematically via power/MDE formula
+  variants: ABVariant[];
+  winning_variant_id?: string | null;
+  winner_declared_at?: string | null;
+  winner_declared_by?: string | null;
+  winner_declaration_rationale?: string | null;
+  promoted_to_clip: boolean;
+  winner_promoted_at?: string | null;
+  brand_brain_evidence_id?: string | null;
+  started_at?: string | null;
+  concluded_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ABObservationLog {
+  id: string;
+  experiment_id: string;
+  variant_id: string;
+  user_id: string;
+  data_provenance: ABDataProvenance;
+  metric_type: ABTargetMetric;
+  exposures: number; // impressions or views (denominator)
+  conversions: number; // clicks, completions, engagements (numerator)
+  source_label?: string;
+  period_start?: string;
+  period_end?: string;
+  idempotency_key: string;
+  created_at: string;
+}
+
+export interface CreateABExperimentDTO {
+  project_id?: string;
+  clip_id: string;
+  name: string;
+  hypothesis: string;
+  test_type: ABTestType;
+  target_metric?: ABTargetMetric;
+  platform?: OutputPlatform;
+  traffic_strategy?: ABTrafficStrategy;
+  confidence_threshold?: number;
+  statistical_power?: number;
+  minimum_detectable_effect?: number;
+  baseline_conversion_rate?: number;
+  minimum_practical_lift?: number;
+  variants: Array<{
+    variant_letter: 'A' | 'B' | 'C' | 'D';
+    is_control: boolean;
+    name: string;
+    thumbnail_concept_id?: string | null;
+    thumbnail_image_url?: string | null;
+    title?: string | null;
+    hook_candidate_id?: string | null;
+    hook_text?: string | null;
+    traffic_weight: number;
+    preflight_heuristic_score?: number | null;
+  }>;
+}
+
+export interface RecordABObservationDTO {
+  variant_id: string;
+  exposures: number;
+  conversions: number;
+  data_provenance?: ABDataProvenance;
+  source_label?: string;
+  period_start?: string;
+  period_end?: string;
+  idempotency_key?: string;
+}
+
+export interface DeclareABWinnerDTO {
+  variant_id: string;
+  rationale?: string;
+  force_override?: boolean;
+}
+
+export interface PromoteABWinnerDTO {
+  confirm_promotion: boolean;
+}
+
+export interface ABCapabilityModel {
+  supported_test_types: ABTestType[];
+  supported_metrics: ABTargetMetric[];
+  traffic_strategies: ABTrafficStrategy[];
+  max_variants: number;
+  min_variants: number;
+  decision_rule: string;
+  multiple_comparison_method: 'BONFERRONI';
+  confidence_interval_method: 'WILSON_SCORE';
+}
+
+// ── Phase 32: Experiment History & Reporting ──────────────────────────────
+
+export type ABEvidenceLevel =
+  | 'NO_OBSERVATIONS'
+  | 'INSUFFICIENT_SAMPLE_SIZE'
+  | 'INCONCLUSIVE'
+  | 'WINNER_ELIGIBLE'
+  | 'WINNER_DECLARED';
+
+export interface ABExperimentReport {
+  experiment: ABExperiment;
+  experiment_id: string;
+  experiment_name: string;
+  hypothesis: string;
+  status: ABExperimentStatus;
+  test_type: ABTestType;
+  primary_metric: ABTargetMetric;
+  clip_id: string;
+  clip_title?: string | null;
+  evidence_level: ABEvidenceLevel;
+  total_exposures: number;
+  total_conversions: number;
+  decision_rationale: string;
+  sample_size_progress_percentage: number;
+  sample_size_requirement: {
+    minimum_sample_size_per_variant: number;
+    baseline_conversion_rate: number;
+    relative_mde: number;
+    statistical_power: number;
+    alpha: number;
+  };
+  variants: Array<{
+    variant_id: string;
+    variant_letter: 'A' | 'B' | 'C' | 'D';
+    name: string;
+    is_control: boolean;
+    exposures: number;
+    conversions: number;
+    rate: number;
+    relative_lift: number;
+    performance_status: ABVariantPerformanceStatus;
+    statistical_metrics?: ABVariantStatistics;
+  }>;
+  winning_variant_id?: string | null;
+  provenance_breakdown: Record<string, number>;
+  sample_size_progress: {
+    current_max_exposures: number;
+    required_sample_size: number;
+    progress_percentage: number;
+    is_sample_size_met: boolean;
+  };
+  decision_summary: {
+    decision_rationale: string;
+    has_statistically_significant_winner: boolean;
+    winning_variant_id: string | null;
+    winning_variant_name: string | null;
+    winning_variant_letter: string | null;
+    relative_lift_percentage: number | null;
+    p_value: number | null;
+    adjusted_alpha: number;
+  };
+  observation_summary: {
+    total_exposures: number;
+    total_conversions: number;
+    overall_rate: number;
+    batch_count: number;
+    provenance_breakdown: Record<string, number>;
+    last_observation_at: string | null;
+  };
+}
+
+export interface ListABExperimentsQuery {
+  status?: string;
+  search?: string;
+  clipId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+// ── Phase 33: CSV Analytics Import ──────────────────────────────────────────
+
+export interface ABCsvColumnMapping {
+  variant_column: string;
+  exposures_column: string;
+  conversions_column: string;
+  timestamp_column?: string;
+  period_end_column?: string;
+  source_column?: string;
+}
+
+export interface ABCsvRowPreview {
+  row_number: number;
+  raw_data: Record<string, string>;
+  status: 'VALID' | 'INVALID' | 'DUPLICATE';
+  variant_letter?: 'A' | 'B' | 'C' | 'D';
+  variant_id?: string;
+  variant_name?: string;
+  exposures?: number;
+  conversions?: number;
+  period_start?: string;
+  period_end?: string;
+  source_label?: string;
+  error?: string;
+}
+
+export interface ABCsvPreviewResult {
+  experiment_id: string;
+  experiment_name: string;
+  experiment_status: ABExperimentStatus;
+  headers: string[];
+  detected_mapping: ABCsvColumnMapping;
+  total_rows: number;
+  valid_rows_count: number;
+  invalid_rows_count: number;
+  duplicate_rows_count: number;
+  sample_preview: ABCsvRowPreview[];
+  variant_summary: Array<{
+    variant_id: string;
+    variant_letter: 'A' | 'B' | 'C' | 'D';
+    name: string;
+    valid_rows: number;
+    total_exposures: number;
+    total_conversions: number;
+  }>;
+  can_import: boolean;
+  validation_errors: string[];
+}
+
+export interface ABCsvImportResult {
+  experiment_id: string;
+  total_rows: number;
+  imported_count: number;
+  duplicate_count: number;
+  rejected_count: number;
+  skipped_count: number;
+  row_errors: Array<{
+    row_number: number;
+    error: string;
+    raw_data?: Record<string, string>;
+  }>;
+  updated_experiment: ABExperiment;
+  report?: ABExperimentReport;
+  summary: string;
+}
+
+export interface PreviewABCsvImportDTO {
+  csv_content: string;
+  column_mapping?: Partial<ABCsvColumnMapping>;
+}
+
+export interface ExecuteABCsvImportDTO {
+  csv_content: string;
+  column_mapping?: Partial<ABCsvColumnMapping>;
+}
+
+// ── Phase 35: Content Performance Dashboard ───────────────────────
+
+export interface DashboardMetricSummary {
+  total_clips: number;
+  published_posts_count: number;
+  in_experiment_clips_count: number;
+  recorded_views: number;
+  recorded_impressions: number;
+  recorded_clicks: number;
+  recorded_conversions: number;
+  recorded_exposures: number;
+  recorded_watch_time_seconds: number;
+  click_through_rate: number | null;
+  conversion_rate: number | null;
+  average_engagement_rate: number | null;
+  provenance_breakdown: {
+    platform_sync_count: number;
+    csv_import_count: number;
+    manual_observation_count: number;
+    ab_studio_count: number;
+  };
+  has_sufficient_data: boolean;
+  insufficient_data_reasons: string[];
+}
+
+export interface DashboardTimelinePoint {
+  date: string;
+  views: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  exposures: number;
+  sources: string[];
+}
+
+export interface DashboardPlatformStat {
+  platform: string;
+  views: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  exposures: number;
+  posts_count: number;
+  ctr: number | null;
+  conversion_rate: number | null;
+}
+
+export interface DashboardContentItem {
+  clip_id: string;
+  project_id?: string;
+  title: string;
+  status: 'ready' | 'published' | 'in_experiment' | 'draft';
+  created_at: string;
+  duration_seconds?: number;
+  views: number;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  exposures: number;
+  ctr: number | null;
+  conversion_rate: number | null;
+  engagement: number;
+  experiment?: {
+    id: string;
+    name: string;
+    status: 'DRAFT' | 'ACTIVE' | 'PAUSED' | 'CONCLUDED' | 'CANCELLED';
+    test_type: string;
+    winning_variant_id: string | null;
+    is_significant: boolean;
+    confidence_level?: number;
+  } | null;
+  provenance_sources: string[];
+}
+
+export interface DashboardFilterOptions {
+  days?: number;
+  startDate?: string;
+  endDate?: string;
+  platform?: string;
+  clipId?: string;
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ContentPerformanceDashboardResponse {
+  summary: DashboardMetricSummary;
+  timeline: DashboardTimelinePoint[];
+  platforms: DashboardPlatformStat[];
+  content_items: DashboardContentItem[];
+  total_content_items: number;
+  page: number;
+  limit: number;
+  filters_applied: {
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+    platform?: string;
+    clipId?: string;
+    status?: string;
+  };
+  data_provenance_sources: string[];
+  explanation?: string;
+}
+
+// ── Phase 36: Content Workflow Automation Types ────────────────────
+
+export type WorkflowState =
+  | 'PLANNED'
+  | 'IN_PREPARATION'
+  | 'READY_FOR_REVIEW'
+  | 'AWAITING_APPROVAL'
+  | 'APPROVED'
+  | 'PUBLISHED';
+
+export interface WorkflowAuditEntry {
+  id: string;
+  from_state: WorkflowState;
+  to_state: WorkflowState;
+  actor_id: string;
+  action: 'INITIALIZE' | 'TRANSITION' | 'APPROVAL' | 'REVISION_REQUEST' | 'PUBLISH_VERIFIED';
+  notes?: string;
+  timestamp: string | Date;
+}
+
+export interface WorkflowArtifactSummary {
+  clip?: {
+    id: string;
+    title: string;
+    status: string;
+    duration_seconds?: number;
+    aspect_ratio?: string;
+  } | null;
+  content_pack?: {
+    id: string;
+    status: string;
+    items_count: number;
+    approved_count: number;
+  } | null;
+  hook_lab?: {
+    id: string;
+    status: string;
+    candidates_count: number;
+    selected_hook?: string | null;
+  } | null;
+  thumbnail_lab?: {
+    id: string;
+    status: string;
+    concepts_count: number;
+    selected_concept_id?: string | null;
+  } | null;
+  brand_brain?: {
+    profile_id: string;
+    status: string;
+    version: number;
+  } | null;
+  autopilot?: {
+    id: string;
+    status: string;
+    current_step: string;
+  } | null;
+  publishing?: {
+    id: string;
+    provider: string;
+    status: string;
+    published_at?: Date | string | null;
+    post_url?: string;
+  } | null;
+  ab_experiment?: {
+    id: string;
+    status: string;
+    test_type: string;
+  } | null;
+}
+
+export interface WorkflowReadinessCheck {
+  task_key: string;
+  label: string;
+  description: string;
+  completed: boolean;
+  required_for: WorkflowState[];
+  details?: string;
+}
+
+export interface ContentWorkflowRecord {
+  id: string;
+  user_id: string;
+  project_id: string;
+  clip_id?: string | null;
+  title: string;
+  current_state: WorkflowState;
+  notes?: string;
+  tags?: string[];
+  artifacts: WorkflowArtifactSummary;
+  checklist: WorkflowReadinessCheck[];
+  can_transition_to: WorkflowState[];
+  missing_prerequisites: string[];
+  approved_by?: string | null;
+  approved_at?: Date | string | null;
+  approval_notes?: string | null;
+  version: number;
+  audit_trail: WorkflowAuditEntry[];
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+export interface ContentWorkflowFilterOptions {
+  state?: WorkflowState;
+  clipId?: string;
+  projectId?: string;
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface ContentWorkflowListResponse {
+  workflows: ContentWorkflowRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  state_counts: Record<WorkflowState, number>;
+}
+
+export type WorkspaceRole = 'OWNER' | 'ADMIN' | 'EDITOR' | 'VIEWER';
+
+export interface WorkspaceRecord {
+  id: string;
+  name: string;
+  owner_id: string;
+  is_personal: boolean;
+  created_at: string | Date;
+  updated_at: string | Date;
+  role?: WorkspaceRole;
+  member_count?: number;
+}
+
+export interface WorkspaceMemberRecord {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  user_email?: string;
+  user_name?: string;
+  joined_at: string | Date;
+  updated_at: string | Date;
+}
+
+export interface WorkspaceInvitationRecord {
+  id: string;
+  workspace_id: string;
+  inviter_user_id: string;
+  invitee_email: string;
+  role: WorkspaceRole;
+  status: 'pending' | 'accepted' | 'declined' | 'revoked' | 'expired';
+  expires_at: string | Date;
+  created_at: string | Date;
+  updated_at: string | Date;
+}
+
+export interface CreateWorkspaceDTO {
+  name: string;
+}
+
+export interface InviteMemberDTO {
+  email: string;
+  role: WorkspaceRole;
+}
 
 
 

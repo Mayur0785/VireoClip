@@ -57,9 +57,14 @@ export function Footer() {
           <h2 className="text-xs font-bold uppercase tracking-widest text-forest">
             Legal
           </h2>
-          <p className="mt-5 text-xs leading-relaxed text-[#667b69]">
-            Policies coming soon.
-          </p>
+          <div className="mt-5 space-y-3 text-xs text-[#667b69]">
+            <Link className="block hover:text-clay" to="/terms">
+              Terms of Service
+            </Link>
+            <Link className="block hover:text-clay" to="/privacy">
+              Privacy Policy
+            </Link>
+          </div>
         </div>
       </div>
       <div className="mx-auto flex max-w-[1288px] flex-col justify-between gap-2 border-t border-[#dfe6da] px-5 py-6 text-xs text-[#7b8a7c] sm:flex-row lg:px-8">

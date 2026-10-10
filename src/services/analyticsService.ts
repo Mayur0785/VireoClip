@@ -94,4 +94,21 @@ export const analyticsService = {
     });
     return res.data;
   },
+
+  async getDashboard(options: any = {}): Promise<any> {
+    const params = new URLSearchParams();
+    if (options.days !== undefined) params.append('days', String(options.days));
+    if (options.startDate) params.append('startDate', options.startDate);
+    if (options.endDate) params.append('endDate', options.endDate);
+    if (options.platform) params.append('platform', options.platform);
+    if (options.clipId) params.append('clipId', options.clipId);
+    if (options.status) params.append('status', options.status);
+    if (options.page) params.append('page', String(options.page));
+    if (options.limit) params.append('limit', String(options.limit));
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await backendRequest<{ status: string; data: any }>(`/analytics/dashboard${qs}`);
+    return res.data;
+  },
 };
+

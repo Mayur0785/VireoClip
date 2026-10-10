@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { Request, Response } from 'express';
 import { AuthenticatedRequest, AppError, BillingProviderName, PlanId, BillingInterval } from '../types/index.js';
-import { config } from '../config/index.js';
+import { config, isBillingProviderEnabled } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { getPlanDefinition, getAllPlans } from '../services/billing/planConfig.js';
 import { BillingRegistry } from '../services/billing/billingRegistry.js';
@@ -98,6 +98,13 @@ export async function createCheckout(req: AuthenticatedRequest, res: Response): 
   }
 
   const provider = BillingRegistry.getProvider(providerName);
+  if (!isBillingProviderEnabled(providerName)) {
+    throw new AppError(
+      `Payment provider "${providerName}" is disabled on the server.`,
+      503,
+      'PROVIDER_DISABLED'
+    );
+  }
   if (!provider.isConfigured()) {
     throw new AppError(
       `Payment provider "${providerName}" is not configured on the server. Please check environment variables.`,
@@ -237,6 +244,12 @@ async function processWebhook(
   req: Request,
   res: Response
 ): Promise<void> {
+  if (!isBillingProviderEnabled(providerName)) {
+    logger.warn(`[${providerName} Webhook] Received webhook for disabled provider.`);
+    res.status(403).send(`Provider "${providerName}" is disabled.`);
+    return;
+  }
+
   const provider = BillingRegistry.getProvider(providerName);
   const rawBody = req.body; // Captured Buffer or string from express.raw()
 

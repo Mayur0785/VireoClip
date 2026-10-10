@@ -22,11 +22,13 @@ import {
   OverlayConfig,
   CaptionConfig,
   ClipEditorUpdateDTO,
+  AppError,
   isValidUUID,
   ReframeKeyframe,
 } from '../types/index.js';
 import { CaptionService } from './captionService.js';
 import { SmartReframeService } from './smartReframeService.js';
+import { JobReliabilityService } from './queue/jobReliabilityService.js';
 
 
 // Configure fluent-ffmpeg to use ffmpeg-static binary
@@ -287,6 +289,19 @@ export class ClipRenderService {
 
     activeRenderSet.add(clipId);
 
+    // Heartbeat timer to renew lease during long rendering operations
+    const heartbeatTimer = setInterval(async () => {
+      try {
+        await db.collection('render_jobs').updateOne(
+          { id: jobId, worker_id: workerId },
+          { $set: { locked_at: new Date(), updated_at: new Date() } }
+        );
+      } catch (hbErr: any) {
+        logger.warn(`[ClipRender] Heartbeat failed for job ${jobId}: ${hbErr.message}`);
+      }
+    }, 15000);
+    heartbeatTimer.unref();
+
     const uniqueTag = `${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
     const tempDir = path.join(os.tmpdir(), `vireo-render-${clipId}-${uniqueTag}`);
 
@@ -294,7 +309,7 @@ export class ClipRenderService {
       fs.mkdirSync(tempDir, { recursive: true });
 
       // Update stage: downloading (5%)
-      await ClipRenderService.updateJobStage(jobId, clipId, 'downloading', 5, 'rendering');
+      await ClipRenderService.updateJobStage(jobId, clipId, 'downloading', 5, 'rendering', workerId);
 
       // 1. Download private source video
       const sourcePath = path.join(tempDir, 'source.mp4');
@@ -308,7 +323,7 @@ export class ClipRenderService {
       await downloadObjectToFile('source', clip.source_storage_path, sourcePath);
 
       // 2. FFmpeg cut, manual framing, ASS subtitles, text overlay, and MP4 encode
-      await ClipRenderService.updateJobStage(jobId, clipId, 'cutting', 10, 'rendering');
+      await ClipRenderService.updateJobStage(jobId, clipId, 'cutting', 10, 'rendering', workerId);
 
       const trimStart = Number(clip.trim_start_offset || 0);
       const trimEnd = Number(clip.trim_end_offset || 0);
@@ -519,7 +534,7 @@ export class ClipRenderService {
       }
 
       // 3. Upload rendered MP4 to storage with revision versioning
-      await ClipRenderService.updateJobStage(jobId, clipId, 'uploading', 90, 'uploading');
+      await ClipRenderService.updateJobStage(jobId, clipId, 'uploading', 90, 'uploading', workerId);
 
       const renderedSize = (await fs.promises.stat(outputPath)).size;
       const renderVersion = Number(clip.render_version || 1);
@@ -530,6 +545,9 @@ export class ClipRenderService {
       );
       await uploadFile('clips', outputStoragePath, outputPath, renderedSize, 'video/mp4');
       const finalStoragePath = outputStoragePath;
+
+      // Output verification guard: ensure deliverable exists before marking ready
+      JobReliabilityService.verifyRequiredOutputs('clip_render', { output_storage_path: finalStoragePath });
 
       // 4. Update clip status -> 'ready'
       await dataRepository
@@ -546,24 +564,27 @@ export class ClipRenderService {
         })
         .eq('id', clipId);
 
-      // 5. Update render job -> 'completed' (100%)
+      // 5. Update render job -> 'completed' (100%) - only if worker still owns it
       if (jobId) {
-        await dataRepository
-          .from('render_jobs')
-          .update({
-            status: 'completed',
-            progress: 100,
-            stage: 'completed',
-            completed_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', jobId);
+        await db.collection('render_jobs').updateOne(
+          { id: jobId, worker_id: workerId },
+          {
+            $set: {
+              status: 'completed',
+              progress: 100,
+              stage: 'completed',
+              completed_at: new Date(),
+              updated_at: new Date(),
+            },
+          }
+        );
       }
 
       logger.info(`[ClipRender] Successfully rendered and published clip ${clipId} to ${finalStoragePath}`);
     } catch (err: any) {
       const code = err.code || 'RENDER_FAILED';
-      const message = err.message || 'Video rendering failed.';
+      const isTransient = JobReliabilityService.isTransientError(err) || ['RENDER_TIMEOUT', 'STORAGE_UNAVAILABLE', 'FFMPEG_FAILED', 'NETWORK_ERROR'].includes(code);
+      const message = JobReliabilityService.sanitizeErrorMessage(err.message || 'Video rendering failed.');
 
       logger.error(`[ClipRender] Clip rendering failed for clip ${clipId}`, {
         clipId,
@@ -590,12 +611,10 @@ export class ClipRenderService {
           const currentJob = await db.collection('render_jobs').findOne({ id: jobId });
           const attempts = currentJob?.attempts || 1;
           const maxAttempts = currentJob?.max_attempts || 3;
-          const isTransient = ['RENDER_TIMEOUT', 'STORAGE_UNAVAILABLE', 'FFMPEG_FAILED', 'NETWORK_ERROR'].includes(code);
 
           if (isTransient && attempts < maxAttempts) {
-            // Exponential backoff: attempt 1 -> 2s, attempt 2 -> 5s, attempt 3 -> 15s
-            const backoffDelays = [2000, 5000, 15000];
-            const delayMs = backoffDelays[attempts - 1] || 15000;
+            // Exponential backoff with jitter
+            const delayMs = JobReliabilityService.computeBackoffDelayMs(attempts, { baseDelayMs: 2000, maxDelayMs: 30000, jitter: true });
             const nextRetryAt = new Date(Date.now() + delayMs);
 
             await db.collection('render_jobs').updateOne(
@@ -637,6 +656,7 @@ export class ClipRenderService {
         }
       }
     } finally {
+      clearInterval(heartbeatTimer);
       // 6. Reliable cleanup of all temporary directories and files
       try {
         if (fs.existsSync(tempDir)) {
@@ -674,26 +694,35 @@ export class ClipRenderService {
   /**
    * Helper to update stage and clip render_status
    */
-  private static async updateJobStage(
+  public static async updateJobStage(
     jobId: string | undefined,
     clipId: string,
     stage: string,
     progress: number,
-    clipStatus: string
+    clipStatus: string,
+    expectedWorkerId?: string
   ): Promise<void> {
     if (jobId) {
-      try {
-        await dataRepository
-          .from('render_jobs')
-          .update({
+      const db = await getMongoDb();
+      const filter: any = { id: jobId };
+      if (expectedWorkerId) {
+        filter.worker_id = expectedWorkerId;
+      }
+      const res = await db.collection('render_jobs').updateOne(
+        filter,
+        {
+          $set: {
             stage,
             progress,
             status: 'processing',
-            started_at: stage === 'cutting' ? new Date().toISOString() : undefined,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', jobId);
-      } catch {}
+            ...(stage === 'cutting' ? { started_at: new Date() } : {}),
+            updated_at: new Date(),
+          },
+        }
+      );
+      if (expectedWorkerId && res.matchedCount === 0) {
+        throw new AppError('Render lease was expired or claimed by another worker.', 409, 'FENCING_TOKEN_MISMATCH');
+      }
     }
 
     try {
@@ -705,6 +734,53 @@ export class ClipRenderService {
         })
         .eq('id', clipId);
     } catch {}
+  }
+
+  /**
+   * Background processor: claims due queued render jobs and recovers stale leases
+   */
+  public static async processDueRenderJobs(): Promise<number> {
+    if (!isMongoConfigured) return 0;
+    const db = await getMongoDb();
+    const now = new Date();
+    const staleCutoff = new Date(now.getTime() - 15 * 60 * 1000); // 15 min stale lease
+
+    // 1. Recover stale locks
+    await db.collection('render_jobs').updateMany(
+      {
+        status: 'processing',
+        locked_at: { $lt: staleCutoff },
+      },
+      {
+        $set: {
+          status: 'queued',
+          stage: 'queued',
+          worker_id: null,
+          locked_at: null,
+          updated_at: now,
+        },
+      }
+    );
+
+    // 2. Claim next due job
+    const dueJob = await db.collection('render_jobs').findOne(
+      {
+        status: 'queued',
+        attempts: { $lt: 3 },
+        $or: [{ next_retry_at: null }, { next_retry_at: { $lte: now } }],
+      },
+      { sort: { created_at: 1 } }
+    );
+
+    if (!dueJob) return 0;
+
+    try {
+      await this.renderClipJob(dueJob.clip_id, dueJob.user_id, dueJob.id);
+      return 1;
+    } catch (err: any) {
+      logger.warn(`[ClipRender] Error processing due render job ${dueJob.id}: ${err.message}`);
+      return 1;
+    }
   }
 
   /**
@@ -1033,8 +1109,8 @@ export class ClipRenderService {
 
       if (Array.isArray(incoming.caption_overrides)) {
         sanitized.caption_overrides = incoming.caption_overrides
-          .filter((o) => o && typeof o.cueId === 'string' && typeof o.text === 'string')
-          .map((o) => ({
+          .filter((o: any) => o && typeof o.cueId === 'string' && typeof o.text === 'string')
+          .map((o: any) => ({
             cueId: String(o.cueId).slice(0, 50),
             text: CaptionService.sanitizeAssText(o.text).slice(0, 200),
           }));

@@ -40,6 +40,13 @@ const names = new Set([
   'thumbnail_concepts',
   'thumbnail_versions',
   'autopilot_runs',
+  'ab_experiments',
+  'ab_observation_logs',
+  'brand_recommendations',
+  'content_workflows',
+  'workspaces',
+  'workspace_members',
+  'workspace_invitations',
 ]);
 type Result = { data: any; error: { message: string; code?: string } | null; count?: number | null };
 type Action = 'select' | 'insert' | 'update' | 'upsert' | 'delete';

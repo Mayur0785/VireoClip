@@ -14,6 +14,9 @@ import {
   RotateCcw,
   Upload,
   Shield,
+  Target,
+  Check,
+  X,
 } from 'lucide-react';
 import { brandBrainService } from '../services/brandBrainService';
 import {
@@ -22,6 +25,8 @@ import {
   BrandEvidence,
   BrandCheckResult,
   BrandRecommendation,
+  BrandContentPillar,
+  BrandApprovedTerm,
   SAFE_EDITOR_FONTS,
 } from '../types';
 
@@ -30,7 +35,7 @@ export const BrandPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'voice' | 'visual' | 'captions' | 'hooks_cta' | 'editing_audio' | 'learned' | 'check' | 'versions' | 'import'
+    'overview' | 'intelligence' | 'voice' | 'visual' | 'captions' | 'hooks_cta' | 'editing_audio' | 'learned' | 'check' | 'versions' | 'import'
   >('overview');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -40,6 +45,15 @@ export const BrandPage: React.FC = () => {
   const [recommendations, setRecommendations] = useState<BrandRecommendation[]>([]);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [analyticsStatus, setAnalyticsStatus] = useState<string>('INSUFFICIENT_DATA');
+  const [evidenceExplanation, setEvidenceExplanation] = useState<string>('');
+
+  // Human review modal state
+  const [overwriteModal, setOverwriteModal] = useState<{
+    isOpen: boolean;
+    recommendation: BrandRecommendation | null;
+    message: string;
+    editedValue?: any;
+  }>({ isOpen: false, recommendation: null, message: '' });
 
   // Brand Check State
   const [checkText, setCheckText] = useState('');
@@ -80,10 +94,66 @@ export const BrandPage: React.FC = () => {
       setRecommendations(recs.recommendations || []);
       setConflicts(recs.conflicts || []);
       setAnalyticsStatus(recs.analytics_status || 'INSUFFICIENT_DATA');
+      setEvidenceExplanation(recs.explanation || '');
     } catch (err: any) {
       setFeedback({ type: 'error', message: err.message || 'Failed to load Brand Brain profile.' });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveInsight = async (
+    rec: BrandRecommendation,
+    confirmOverwrite = false,
+    customValue?: any
+  ) => {
+    if (!profile) return;
+    try {
+      const res = await brandBrainService.approveRecommendation(rec.id, {
+        confirm_overwrite: confirmOverwrite,
+        edited_value: customValue,
+        brand_id: profile.id,
+      });
+      setProfile(res.profile);
+      setRecommendations((prev) => prev.filter((r) => r.id !== rec.id));
+      setOverwriteModal({ isOpen: false, recommendation: null, message: '' });
+      setFeedback({
+        type: 'success',
+        message: `Approved brand insight: "${rec.title}". Profile updated and version recorded.`,
+      });
+      // Refresh version ledger
+      const updatedVersions = await brandBrainService.getVersions(profile.id);
+      setVersions(updatedVersions);
+    } catch (err: any) {
+      if (err.code === 'CONFIRMATION_REQUIRED' || err.message?.includes('confirm')) {
+        setOverwriteModal({
+          isOpen: true,
+          recommendation: rec,
+          message: err.message || 'Approving this insight will replace an existing guideline.',
+          editedValue: customValue,
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          message: err.message || 'Failed to approve recommendation.',
+        });
+      }
+    }
+  };
+
+  const handleDismissInsight = async (rec: BrandRecommendation) => {
+    try {
+      await brandBrainService.dismissRecommendation(rec.id);
+      setRecommendations((prev) => prev.filter((r) => r.id !== rec.id));
+      setFeedback({
+        type: 'success',
+        message: `Dismissed recommendation: "${rec.title}".`,
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: 'error',
+        message: err.message || 'Failed to dismiss recommendation.',
+      });
     }
   };
 
@@ -328,6 +398,7 @@ export const BrandPage: React.FC = () => {
       <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border pb-2 text-sm font-medium">
         {[
           { id: 'overview', label: 'Overview', icon: Brain },
+          { id: 'intelligence', label: 'Audience & Positioning', icon: Target },
           { id: 'voice', label: 'Creator Voice', icon: Mic },
           { id: 'visual', label: 'Visual System', icon: Palette },
           { id: 'captions', label: 'Captions DNA', icon: Subtitles },
@@ -366,6 +437,18 @@ export const BrandPage: React.FC = () => {
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Industry / Niche</label>
                 <p className="text-base font-semibold text-foreground">{profile.identity.industry || 'General'}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Target Audience</label>
+                <p className="text-sm font-medium text-foreground">
+                  {profile.identity.target_audience || 'Not defined yet. Review proposed intelligence or define in Audience & Positioning.'}
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-muted-foreground">Core Value Proposition</label>
+                <p className="text-sm font-medium text-foreground">
+                  {profile.identity.core_messaging || 'Not defined yet. Add in Audience & Positioning.'}
+                </p>
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Primary Palette</label>
@@ -408,6 +491,12 @@ export const BrandPage: React.FC = () => {
                 <span className="text-xs font-semibold text-foreground">{profile.learning.evidence_count} events recorded</span>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-3">
+                <span className="text-xs text-muted-foreground">Evidence References</span>
+                <span className="text-xs font-semibold text-foreground">
+                  {(profile.evidence_references || []).length} linked citations
+                </span>
+              </div>
+              <div className="flex items-center justify-between border-b border-border pb-3">
                 <span className="text-xs text-muted-foreground">Locked Brand Rules</span>
                 <span className="text-xs font-semibold text-emerald-600">
                   {Object.values(profile.locks || {}).filter(Boolean).length} rules locked
@@ -415,28 +504,125 @@ export const BrandPage: React.FC = () => {
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">Performance Signals</span>
-                <span className="rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                <span className={`rounded-md px-2 py-1 text-xs font-medium ${
+                  analyticsStatus === 'SUFFICIENT_DATA'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700'
+                }`}>
                   {analyticsStatus}
                 </span>
               </div>
             </div>
           </div>
 
-          {/* Explainable Recommendations */}
+          {/* Insufficient Evidence Notice */}
+          {analyticsStatus === 'INSUFFICIENT_DATA' && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-5 shadow-xs lg:col-span-3">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="size-5 shrink-0 text-amber-600 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                    Evidence Gathering in Progress
+                  </h4>
+                  <p className="mt-1 text-xs text-amber-800 leading-relaxed">
+                    {evidenceExplanation ||
+                      'At least 3 analyzed clips or performance records are required to derive statistically grounded audience or messaging insights without speculation.'}
+                  </p>
+                  <p className="mt-2 text-[11px] text-amber-700 font-medium">
+                    Vireo Brand Brain never invents audience facts, customer testimonials, or performance metrics. Import or analyze clips to unlock automated intelligence suggestions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Explainable Proposed Brand Insights */}
           {recommendations.length > 0 && (
             <div className="rounded-2xl border border-border bg-white p-6 shadow-xs lg:col-span-3">
-              <h3 className="text-sm font-bold text-foreground">Explainable Brand Recommendations</h3>
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Proposed Brand Intelligence Insights</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Evidence-derived recommendations for voice, audience, and content pillars. Human approval required before applying to brand guidelines.
+                  </p>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
+                  {recommendations.length} Pending Review
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                 {recommendations.map((r) => (
-                  <div key={r.id} className="rounded-xl border border-border p-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground">{r.title}</span>
-                      <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                        {r.confidence}
-                      </span>
+                  <div key={r.id} className="flex flex-col justify-between rounded-xl border border-border bg-neutral-50/60 p-4 transition hover:border-emerald-300">
+                    <div>
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-xs font-bold text-foreground leading-snug">{r.title}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                              r.source === 'EVIDENCE_LEARNED'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : r.source === 'USER_PROVIDED'
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-purple-100 text-purple-800'
+                            }`}
+                          >
+                            {r.source || 'AI_DERIVED'}
+                          </span>
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                              r.confidence === 'HIGH'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : r.confidence === 'MEDIUM'
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}
+                          >
+                            {r.confidence}
+                          </span>
+                        </div>
+                      </div>
+
+                      <p className="mt-2 text-xs text-muted-foreground leading-relaxed">{r.description}</p>
+
+                      {/* Source snippet citation */}
+                      {r.source_snippet && (
+                        <div className="mt-2 rounded-lg border-l-2 border-emerald-400 bg-white p-2 text-[11px] italic text-neutral-600">
+                          {r.source_snippet}
+                        </div>
+                      )}
+
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-mono text-gray-500">Evidence: {r.evidence}</span>
+                      </div>
+
+                      {r.evidence_references && r.evidence_references.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {r.evidence_references.map((ref, idx) => (
+                            <span key={idx} className="rounded bg-white border border-border px-1.5 py-0.5 text-[9px] font-mono text-gray-600">
+                              {ref}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>
-                    <p className="mt-2 text-[11px] font-mono text-gray-500">Evidence: {r.evidence}</p>
+
+                    {/* Human Review Actions */}
+                    <div className="mt-4 flex items-center justify-end gap-2 border-t border-border/60 pt-3">
+                      <button
+                        onClick={() => handleDismissInsight(r)}
+                        className="rounded-lg border border-border bg-white px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-neutral-100 hover:text-foreground"
+                      >
+                        Dismiss
+                      </button>
+                      <button
+                        onClick={() => handleApproveInsight(r)}
+                        className="flex items-center gap-1.5 rounded-lg bg-vireo-green px-3 py-1 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-600"
+                      >
+                        <Check className="size-3.5" />
+                        Approve Insight
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -457,6 +643,339 @@ export const BrandPage: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB CONTENT: Audience & Positioning */}
+      {activeTab === 'intelligence' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-border bg-white p-6 shadow-xs">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Target Audience & Needs</h2>
+                <p className="text-xs text-muted-foreground">
+                  Grounded audience definitions used across Hook Lab, Thumbnail Lab, Content Packs, and Autopilot.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-foreground">Primary Target Audience</label>
+                <textarea
+                  rows={3}
+                  className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.identity.target_audience || ''}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: { ...profile.identity, target_audience: e.target.value },
+                    })
+                  }
+                  placeholder="e.g. Early-to-mid career software engineers and tech creators looking for actionable systems..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Audience Needs & Goals (one per line)</label>
+                <textarea
+                  rows={4}
+                  className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={(profile.identity.audience_needs || []).join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: {
+                        ...profile.identity,
+                        audience_needs: e.target.value.split('\n').filter(Boolean),
+                      },
+                    })
+                  }
+                  placeholder="Need faster video production&#10;Want clear technical explanations&#10;Seeking career growth advice..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Audience Pain Points (one per line)</label>
+                <textarea
+                  rows={4}
+                  className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={(profile.identity.audience_pain_points || []).join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: {
+                        ...profile.identity,
+                        audience_pain_points: e.target.value.split('\n').filter(Boolean),
+                      },
+                    })
+                  }
+                  placeholder="Struggles with retention drops in first 3s&#10;Overwhelmed by editing software&#10;Inconsistent posting schedule..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-foreground">Target Demographics / Professional Level</label>
+                <input
+                  type="text"
+                  className="mt-1.5 w-full rounded-xl border border-border p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.identity.target_demographics || ''}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: { ...profile.identity, target_demographics: e.target.value },
+                    })
+                  }
+                  placeholder="e.g. 24–40, Tech / Knowledge workers, Global English-speaking creators"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white p-6 shadow-xs">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Core Messaging & Positioning</h2>
+                <p className="text-xs text-muted-foreground">
+                  The central thesis and distinct angle of your brand.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-foreground">Positioning Statement</label>
+                <textarea
+                  rows={2}
+                  className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.identity.positioning_statement || ''}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: { ...profile.identity, positioning_statement: e.target.value },
+                    })
+                  }
+                  placeholder="For [target audience] who [need], our brand provides [unique solution] that [key benefit]..."
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="text-xs font-semibold text-foreground">Core Messaging & Value Proposition</label>
+                <textarea
+                  rows={3}
+                  className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.identity.core_messaging || ''}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: { ...profile.identity, core_messaging: e.target.value },
+                    })
+                  }
+                  placeholder="Primary value proposition communicated in clips, captions, and thumbnails..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Brand Mission / Vision</label>
+                <input
+                  type="text"
+                  className="mt-1.5 w-full rounded-xl border border-border p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.identity.brand_mission || ''}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: { ...profile.identity, brand_mission: e.target.value },
+                    })
+                  }
+                  placeholder="e.g. Empowering 100,000 engineers to communicate clearly on video"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Supporting Value Propositions (one per line)</label>
+                <textarea
+                  rows={3}
+                  className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={(profile.identity.value_propositions || []).join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      identity: {
+                        ...profile.identity,
+                        value_propositions: e.target.value.split('\n').filter(Boolean),
+                      },
+                    })
+                  }
+                  placeholder="Zero-fluff technical deep dives&#10;Tested production blueprints&#10;Actionable in under 60 seconds..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white p-6 shadow-xs">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-foreground">Content Pillars & Recurring Themes</h2>
+                <p className="text-xs text-muted-foreground">
+                  The primary content buckets that structure your videos and Content Packs.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  const currentPillars = profile.identity.content_pillars || [];
+                  const newPillar: BrandContentPillar = {
+                    name: `Pillar ${currentPillars.length + 1}`,
+                    description: '',
+                    keywords: [],
+                  };
+                  setProfile({
+                    ...profile,
+                    identity: {
+                      ...profile.identity,
+                      content_pillars: [...currentPillars, newPillar],
+                    },
+                  });
+                }}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:bg-cream"
+              >
+                + Add Content Pillar
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4">
+              {(!profile.identity.content_pillars || profile.identity.content_pillars.length === 0) ? (
+                <div className="rounded-xl border border-dashed border-border p-8 text-center">
+                  <p className="text-xs text-muted-foreground">
+                    No content pillars set yet. Click &quot;+ Add Content Pillar&quot; or approve evidence recommendations in Overview.
+                  </p>
+                </div>
+              ) : (
+                profile.identity.content_pillars.map((pillar, idx) => (
+                  <div key={idx} className="rounded-xl border border-border p-4 bg-neutral-50/50">
+                    <div className="flex items-center justify-between gap-4">
+                      <input
+                        type="text"
+                        className="font-bold text-sm bg-transparent border-b border-border pb-1 focus:outline-none focus:border-vireo-green flex-1"
+                        value={pillar.name}
+                        onChange={(e) => {
+                          const updated = [...(profile.identity.content_pillars || [])];
+                          updated[idx] = { ...updated[idx], name: e.target.value };
+                          setProfile({ ...profile, identity: { ...profile.identity, content_pillars: updated } });
+                        }}
+                        placeholder="Pillar Name (e.g. Tactical Tutorials)"
+                      />
+                      <button
+                        onClick={() => {
+                          const updated = (profile.identity.content_pillars || []).filter((_, i) => i !== idx);
+                          setProfile({ ...profile, identity: { ...profile.identity, content_pillars: updated } });
+                        }}
+                        className="text-xs font-medium text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      className="mt-3 w-full rounded-lg border border-border bg-white p-2.5 text-xs"
+                      value={pillar.description}
+                      onChange={(e) => {
+                        const updated = [...(profile.identity.content_pillars || [])];
+                        updated[idx] = { ...updated[idx], description: e.target.value };
+                        setProfile({ ...profile, identity: { ...profile.identity, content_pillars: updated } });
+                      }}
+                      placeholder="Describe the focus and audience goal of this content pillar..."
+                    />
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-mono"
+                        value={(pillar.keywords || []).join(', ')}
+                        onChange={(e) => {
+                          const updated = [...(profile.identity.content_pillars || [])];
+                          updated[idx] = {
+                            ...updated[idx],
+                            keywords: e.target.value.split(',').map((k) => k.trim()).filter(Boolean),
+                          };
+                          setProfile({ ...profile, identity: { ...profile.identity, content_pillars: updated } });
+                        }}
+                        placeholder="Comma-separated keywords (e.g. tutorial, engineering, how-to)"
+                      />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white p-6 shadow-xs">
+            <h2 className="text-lg font-bold text-foreground">Platform-Specific Content Guidance</h2>
+            <p className="text-xs text-muted-foreground">
+              Approved tone and duration parameters consumed by Content Pack and Autopilot generators.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { key: 'tiktok', name: 'TikTok', defaultTone: 'casual and fast' },
+                { key: 'youtube_shorts', name: 'YouTube Shorts', defaultTone: 'engaging and structured' },
+                { key: 'instagram', name: 'Instagram Reels', defaultTone: 'conversational and aesthetic' },
+                { key: 'linkedin', name: 'LinkedIn Video', defaultTone: 'professional and insightful' },
+              ].map((plat) => {
+                const guidance = (profile.platform_guidance || {})[plat.key] || {};
+                return (
+                  <div key={plat.key} className="rounded-xl border border-border p-4 bg-neutral-50/40">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">{plat.name}</h4>
+                    <div className="mt-3 space-y-2">
+                      <div>
+                        <label className="text-[10px] font-medium text-muted-foreground">Platform Tone</label>
+                        <input
+                          type="text"
+                          className="mt-1 w-full rounded-lg border border-border bg-white p-1.5 text-xs"
+                          value={guidance.tone || plat.defaultTone}
+                          onChange={(e) => {
+                            const updated = {
+                              ...(profile.platform_guidance || {}),
+                              [plat.key]: { ...guidance, tone: e.target.value },
+                            };
+                            setProfile({ ...profile, platform_guidance: updated });
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-medium text-muted-foreground">CTA Style</label>
+                        <input
+                          type="text"
+                          className="mt-1 w-full rounded-lg border border-border bg-white p-1.5 text-xs"
+                          value={guidance.cta_style || 'FOLLOW'}
+                          onChange={(e) => {
+                            const updated = {
+                              ...(profile.platform_guidance || {}),
+                              [plat.key]: { ...guidance, cta_style: e.target.value },
+                            };
+                            setProfile({ ...profile, platform_guidance: updated });
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={() =>
+                handleSaveProfile({
+                  identity: profile.identity,
+                  platform_guidance: profile.platform_guidance,
+                })
+              }
+              disabled={saving}
+              className="rounded-xl bg-vireo-green px-6 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-600 disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save Audience & Positioning Guidelines'}
+            </button>
+          </div>
         </div>
       )}
 
@@ -484,37 +1003,158 @@ export const BrandPage: React.FC = () => {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          <div className="space-y-4">
             <div>
-              <label className="text-xs font-semibold text-foreground">Preferred Phrasing / Signatures</label>
+              <label className="text-xs font-semibold text-foreground">Voice & Tone Summary</label>
               <textarea
-                rows={4}
-                className="mt-2 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
-                value={profile.voice.preferred_phrasing.join('\n')}
+                rows={2}
+                className="mt-1.5 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                value={profile.voice.voice_summary || ''}
                 onChange={(e) =>
                   setProfile({
                     ...profile,
-                    voice: { ...profile.voice, preferred_phrasing: e.target.value.split('\n').filter(Boolean) },
+                    voice: { ...profile.voice, voice_summary: e.target.value },
                   })
                 }
-                placeholder="Enter one preferred phrase per line..."
+                placeholder="High-level description of voice, e.g. Direct, educational, conversational, zero-fluff..."
               />
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-foreground">Prohibited / Avoid Phrasing</label>
-              <textarea
-                rows={4}
-                className="mt-2 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
-                value={profile.voice.avoid_phrasing.join('\n')}
-                onChange={(e) =>
-                  setProfile({
-                    ...profile,
-                    voice: { ...profile.voice, avoid_phrasing: e.target.value.split('\n').filter(Boolean) },
-                  })
-                }
-                placeholder="Enter prohibited phrases that Vireo should never generate..."
-              />
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div>
+                <label className="text-xs font-semibold text-foreground">Preferred Phrasing / Signatures</label>
+                <textarea
+                  rows={4}
+                  className="mt-2 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.voice.preferred_phrasing.join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      voice: { ...profile.voice, preferred_phrasing: e.target.value.split('\n').filter(Boolean) },
+                    })
+                  }
+                  placeholder="Enter one preferred phrase per line..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Prohibited / Avoid Phrasing</label>
+                <textarea
+                  rows={4}
+                  className="mt-2 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={profile.voice.avoid_phrasing.join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      voice: { ...profile.voice, avoid_phrasing: e.target.value.split('\n').filter(Boolean) },
+                    })
+                  }
+                  placeholder="Enter prohibited phrases that Vireo should never generate..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Forbidden Claims & Guarantees (one per line)</label>
+                <textarea
+                  rows={3}
+                  className="mt-2 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={(profile.voice.forbidden_claims || []).join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      voice: {
+                        ...profile.voice,
+                        forbidden_claims: e.target.value.split('\n').filter(Boolean),
+                      },
+                    })
+                  }
+                  placeholder="Guaranteed 10x ROI&#10;Zero effort required&#10;Instant results..."
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-foreground">Styles & Tropes to Avoid (one per line)</label>
+                <textarea
+                  rows={3}
+                  className="mt-2 w-full rounded-xl border border-border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-vireo-green"
+                  value={(profile.voice.styles_to_avoid || []).join('\n')}
+                  onChange={(e) =>
+                    setProfile({
+                      ...profile,
+                      voice: {
+                        ...profile.voice,
+                        styles_to_avoid: e.target.value.split('\n').filter(Boolean),
+                      },
+                    })
+                  }
+                  placeholder="Over-hyped YouTube yelling&#10;Cheesy clickbait tropes&#10;Passive-aggressive tone..."
+                />
+              </div>
+            </div>
+
+            {/* Approved Terminology Management */}
+            <div className="pt-2">
+              <div className="flex items-center justify-between border-t border-border pt-4">
+                <div>
+                  <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">Approved Terminology Glossary</h3>
+                  <p className="text-[11px] text-muted-foreground">Standardized terms and phrasing Vireo should favor in hooks and scripts.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    const currentTerms = profile.voice.approved_terminology || [];
+                    const newTerm: BrandApprovedTerm = { term: '', definition: '' };
+                    setProfile({
+                      ...profile,
+                      voice: { ...profile.voice, approved_terminology: [...currentTerms, newTerm] },
+                    });
+                  }}
+                  className="rounded-lg border border-border px-3 py-1 text-xs font-medium hover:bg-cream"
+                >
+                  + Add Term
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                {(!profile.voice.approved_terminology || profile.voice.approved_terminology.length === 0) ? (
+                  <p className="text-xs italic text-muted-foreground">No approved terminology registered yet.</p>
+                ) : (
+                  profile.voice.approved_terminology.map((t, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        className="w-1/3 rounded-lg border border-border p-2 text-xs font-semibold"
+                        placeholder="Approved Term"
+                        value={t.term}
+                        onChange={(e) => {
+                          const updated = [...(profile.voice.approved_terminology || [])];
+                          updated[idx] = { ...updated[idx], term: e.target.value };
+                          setProfile({ ...profile, voice: { ...profile.voice, approved_terminology: updated } });
+                        }}
+                      />
+                      <input
+                        type="text"
+                        className="flex-1 rounded-lg border border-border p-2 text-xs"
+                        placeholder="Definition / Preferred context"
+                        value={t.definition || ''}
+                        onChange={(e) => {
+                          const updated = [...(profile.voice.approved_terminology || [])];
+                          updated[idx] = { ...updated[idx], definition: e.target.value };
+                          setProfile({ ...profile, voice: { ...profile.voice, approved_terminology: updated } });
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const updated = (profile.voice.approved_terminology || []).filter((_, i) => i !== idx);
+                          setProfile({ ...profile, voice: { ...profile.voice, approved_terminology: updated } });
+                        }}
+                        className="p-1 text-neutral-400 hover:text-red-500"
+                      >
+                        <X className="size-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
 
@@ -931,6 +1571,48 @@ export const BrandPage: React.FC = () => {
                 className="rounded-xl bg-vireo-green px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-600"
               >
                 {saving ? 'Completing...' : 'Finish Setup'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OVERWRITE CONFIRMATION MODAL */}
+      {overwriteModal.isOpen && overwriteModal.recommendation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-amber-200">
+            <div className="flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="size-5 shrink-0 text-amber-600" />
+              <h3 className="text-base font-bold text-foreground">Confirm Overwriting Brand Guideline</h3>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground leading-relaxed">
+              {overwriteModal.message ||
+                'This approved recommendation will replace your currently approved brand guideline. This change will be snapshotted in version history.'}
+            </p>
+
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-xs">
+              <div className="font-semibold text-amber-900">{overwriteModal.recommendation.title}</div>
+              <p className="mt-1 text-muted-foreground text-[11px]">{overwriteModal.recommendation.description}</p>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                onClick={() => setOverwriteModal({ isOpen: false, recommendation: null, message: '' })}
+                className="rounded-xl border border-border px-4 py-2 text-xs font-medium text-foreground hover:bg-cream"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() =>
+                  handleApproveInsight(
+                    overwriteModal.recommendation!,
+                    true,
+                    overwriteModal.editedValue
+                  )
+                }
+                className="rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-amber-700"
+              >
+                Confirm & Overwrite
               </button>
             </div>
           </div>

@@ -17,6 +17,7 @@ import { AudioFeatureService } from './audioFeatureService.js';
 import { OcrFeatureService } from './ocrFeatureService.js';
 import { FaceFeatureService } from './faceFeatureService.js';
 import { MultimodalTimelineService } from './multimodalTimelineService.js';
+import { JobReliabilityService } from '../queue/jobReliabilityService.js';
 
 export class VideoAnalysisWorker {
   private static workerId = `worker_${process.pid}_${crypto.randomBytes(4).toString('hex')}`;
@@ -68,12 +69,18 @@ export class VideoAnalysisWorker {
     const col = db.collection<VideoAnalysisJobRecord>('video_analysis_jobs');
     const now = new Date();
     const leaseExpiry = new Date(now.getTime() - 5 * 60 * 1000);
+    const retryDue = { $or: [{ next_retry_at: null }, { next_retry_at: { $lte: now } }] };
 
     const claimed = await col.findOneAndUpdate(
       {
-        $or: [
-          { status: 'queued', attempts: { $lt: 3 } },
-          { status: 'processing', locked_at: { $lt: leaseExpiry }, attempts: { $lt: 3 } },
+        $and: [
+          retryDue,
+          {
+            $or: [
+              { status: 'queued', attempts: { $lt: 3 } },
+              { status: 'processing', locked_at: { $lt: leaseExpiry }, attempts: { $lt: 3 } },
+            ],
+          },
         ],
       },
       {
@@ -223,13 +230,41 @@ export class VideoAnalysisWorker {
         timeline: fusedTimeline,
       });
 
+      if (!savedRecord || !savedRecord.id) {
+        throw new Error('Deliverable verification failed: video analysis record was not saved');
+      }
+
       await this.updateJobStage(job.id, 'completed', 100, 'completed');
       logger.info(`[VideoAnalysisWorker] Multimodal analysis completed for project ${job.project_id}`);
 
       return savedRecord;
     } catch (err: any) {
       logger.error(`[VideoAnalysisWorker] Analysis job ${job.id} failed: ${err.message}`);
-      await this.updateJobStage(job.id, 'failed', 0, 'failed', err.message);
+      const sanitized = JobReliabilityService.sanitizeErrorMessage(err);
+      const isTransient = JobReliabilityService.isTransientError(err);
+      const currentAttempts = (job.attempts || 1);
+      const maxAttempts = job.max_attempts || 3;
+
+      if (isTransient && currentAttempts < maxAttempts) {
+        const delayMs = JobReliabilityService.computeBackoffDelayMs(currentAttempts, { baseDelayMs: 5000, maxDelayMs: 60000 });
+        const nextRetryAt = new Date(Date.now() + delayMs);
+        const db = await getMongoDb();
+        const col = db.collection<VideoAnalysisJobRecord>('video_analysis_jobs');
+        await col.updateOne(
+          { id: job.id },
+          {
+            $set: {
+              status: 'queued',
+              stage: 'queued',
+              error_message: sanitized,
+              next_retry_at: nextRetryAt,
+              updated_at: new Date(),
+            },
+          }
+        );
+      } else {
+        await this.updateJobStage(job.id, 'failed', 0, 'failed', sanitized);
+      }
       throw err;
     } finally {
       if (keyframeCleanup) {

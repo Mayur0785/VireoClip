@@ -26,6 +26,7 @@ import {
   BillingProviderName,
   BillingInterval,
 } from '../services/billingService';
+import { getPlanPriceDisplay, isProviderIntervalSupported } from '../utils/pricingUtils';
 
 export const BillingPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -103,12 +104,26 @@ export const BillingPage: React.FC = () => {
     loadBillingData();
   }, []);
 
+  useEffect(() => {
+    if (!isProviderIntervalSupported(selectedProvider, billingInterval, plans)) {
+      setBillingInterval('month');
+    }
+  }, [selectedProvider, billingInterval, plans]);
+
   const handleStartCheckout = async (planId: 'creator' | 'pro' | 'studio') => {
     const currentProv = providers.find((p) => p.name === selectedProvider);
     if (currentProv && !currentProv.isConfigured) {
       setNotice({
         type: 'error',
         message: `${currentProv.displayName} is not configured on the server. Please configure sandbox credentials.`,
+      });
+      return;
+    }
+
+    if (!isProviderIntervalSupported(selectedProvider, billingInterval, plans)) {
+      setNotice({
+        type: 'error',
+        message: 'Annual billing is currently unavailable for INR (Razorpay). Please select Monthly billing or choose Paddle (Global USD).',
       });
       return;
     }
@@ -420,17 +435,40 @@ export const BillingPage: React.FC = () => {
             Monthly Billing
           </button>
           <button
-            onClick={() => setBillingInterval('year')}
+            onClick={() => {
+              if (!isProviderIntervalSupported(selectedProvider, 'year', plans)) {
+                setNotice({
+                  type: 'info',
+                  message: 'Annual billing is unavailable for INR (Razorpay). Please select Paddle (Global USD) to pay annually.',
+                });
+                return;
+              }
+              setBillingInterval('year');
+            }}
+            disabled={!isProviderIntervalSupported(selectedProvider, 'year', plans)}
+            title={
+              !isProviderIntervalSupported(selectedProvider, 'year', plans)
+                ? 'Annual billing unavailable for INR (Razorpay)'
+                : 'Yearly Billing (Save ~17%)'
+            }
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              billingInterval === 'year'
+              !isProviderIntervalSupported(selectedProvider, 'year', plans)
+                ? 'opacity-50 cursor-not-allowed text-muted-foreground'
+                : billingInterval === 'year'
                 ? 'bg-card text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <span>Yearly Billing</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-sage/20 text-sage">
-              Save ~17%
-            </span>
+            {!isProviderIntervalSupported(selectedProvider, 'year', plans) ? (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-800">
+                Unavailable for INR
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-sage/20 text-sage">
+                Save ~17%
+              </span>
+            )}
           </button>
         </div>
 
@@ -444,7 +482,16 @@ export const BillingPage: React.FC = () => {
             {providers.map((prov) => (
               <button
                 key={prov.name}
-                onClick={() => setSelectedProvider(prov.name)}
+                onClick={() => {
+                  setSelectedProvider(prov.name);
+                  if (!isProviderIntervalSupported(prov.name, billingInterval, plans)) {
+                    setBillingInterval('month');
+                    setNotice({
+                      type: 'info',
+                      message: 'Switched to Monthly billing — annual billing is currently unavailable for INR.',
+                    });
+                  }
+                }}
                 className={`px-2.5 py-1 rounded-xl font-medium transition-all ${
                   selectedProvider === prov.name
                     ? 'bg-card text-foreground font-semibold shadow-sm'
@@ -474,8 +521,7 @@ export const BillingPage: React.FC = () => {
             const isStudio = p.id === 'studio';
             const isFree = p.id === 'free';
 
-            const inrPrice = p.inr_monthly_price;
-            const usdPrice = billingInterval === 'year' ? p.yearly_price : p.monthly_price;
+            const priceDisplay = getPlanPriceDisplay(p, billingInterval, selectedProvider);
 
             return (
               <SpotlightCard
@@ -512,15 +558,25 @@ export const BillingPage: React.FC = () => {
                   <div>
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-baseline gap-1.5">
-                        <span className="text-2xl font-extrabold font-display text-foreground">
-                          {isFree ? '₹0' : `₹${inrPrice.toLocaleString()}`}
+                        <span className={`text-2xl font-extrabold font-display ${!priceDisplay.isAvailable ? 'text-muted-foreground' : 'text-foreground'}`}>
+                          {priceDisplay.symbol}{priceDisplay.amount}
                         </span>
                         <span className="text-xs text-muted-foreground font-medium">
-                          / {isFree ? 'forever' : 'month'}
+                          / {priceDisplay.interval}
                         </span>
                       </div>
+                      {priceDisplay.savingsBadge && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-vireo-green font-semibold">
+                          <span>{priceDisplay.savingsBadge}</span>
+                        </div>
+                      )}
+                      {priceDisplay.unavailableReason && (
+                        <div className="text-[11px] font-medium text-amber-800 bg-amber-500/15 border border-amber-500/25 rounded-lg px-2.5 py-1.5 mt-1">
+                          {priceDisplay.unavailableReason}
+                        </div>
+                      )}
                       <span className="text-xs text-muted-foreground font-mono">
-                        Global: {isFree ? '$0' : `$${usdPrice} / ${billingInterval === 'year' ? 'yr' : 'mo'}`}
+                        {priceDisplay.secondaryText}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">
@@ -556,15 +612,19 @@ export const BillingPage: React.FC = () => {
                   ) : (
                     <ShinyButton
                       variant={isPro ? 'sage' : isStudio ? 'clay' : 'ink'}
-                      className="w-full h-10 text-xs font-semibold"
-                      disabled={checkoutLoading === p.id}
-                      onClick={() => handleStartCheckout(p.id as any)}
+                      className={`w-full h-10 text-xs font-semibold ${!priceDisplay.isAvailable ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={checkoutLoading === p.id || !priceDisplay.isAvailable}
+                      onClick={() => {
+                        if (!priceDisplay.isAvailable) return;
+                        handleStartCheckout(p.id as any);
+                      }}
+                      title={priceDisplay.unavailableReason || undefined}
                     >
                       {checkoutLoading === p.id ? (
                         <span className="size-3.5 rounded-full border-2 border-white/60 border-t-white animate-spin" />
                       ) : (
                         <span>
-                          {`Choose ${p.display_name}`}
+                          {priceDisplay.ctaText}
                         </span>
                       )}
                     </ShinyButton>

@@ -1,26 +1,38 @@
 import crypto from 'node:crypto';
-import { config } from '../config/index.js';
+import { config, validateSocialTokenEncryptionKey } from '../config/index.js';
+
+export { validateSocialTokenEncryptionKey };
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 12 bytes recommended for AES-GCM
 const AUTH_TAG_LENGTH = 16; // 16 bytes auth tag
 
 /**
- * Derives a consistent 32-byte key from configuration or throws if missing.
+ * Derives a consistent 32-byte key from configuration or throws if missing/malformed.
+ * Fails fast with clear non-sensitive error; never exposes the key itself.
  */
 function getEncryptionKey(): Buffer {
   const secret = config.socialTokenEncryptionKey;
-  if (!secret) {
-    throw new Error('SOCIAL_TOKEN_ENCRYPTION_KEY environment variable is not configured.');
+  const validation = validateSocialTokenEncryptionKey(secret, config.isProduction);
+
+  if (!validation.valid) {
+    throw new Error(validation.error || 'SOCIAL_TOKEN_ENCRYPTION_KEY environment variable is not configured.');
+  }
+
+  const trimmed = secret.trim();
+
+  // If secret is 0x-prefixed 64 hex characters (66 chars)
+  if ((trimmed.startsWith('0x') || trimmed.startsWith('0X')) && /^[0-9a-fA-F]{64}$/.test(trimmed.slice(2))) {
+    return Buffer.from(trimmed.slice(2), 'hex');
   }
 
   // If secret is 64 hex characters (32 bytes hex), parse directly
-  if (/^[0-9a-fA-F]{64}$/.test(secret)) {
-    return Buffer.from(secret, 'hex');
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return Buffer.from(trimmed, 'hex');
   }
 
   // Otherwise, use sha256 to deterministically produce 32 bytes
-  return crypto.createHash('sha256').update(secret).digest();
+  return crypto.createHash('sha256').update(trimmed).digest();
 }
 
 /**

@@ -20,6 +20,8 @@ router.post('/check', generalLimiter, asyncHandler(BrandBrainController.checkCom
 
 router.get('/recommendations', generalLimiter, asyncHandler(BrandBrainController.getRecommendations));
 router.post('/recommendations/apply', generalLimiter, asyncHandler(BrandBrainController.applyRecommendation));
+router.post('/recommendations/:id/approve', generalLimiter, asyncHandler(BrandBrainController.approveRecommendation));
+router.post('/recommendations/:id/dismiss', generalLimiter, asyncHandler(BrandBrainController.dismissRecommendation));
 
 router.post('/apply-to-editor', expensiveLimiter, asyncHandler(BrandBrainController.applyToEditor));
 router.post('/revert-editor', expensiveLimiter, asyncHandler(BrandBrainController.revertEditor));

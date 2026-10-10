@@ -133,6 +133,7 @@ class FrontendBrandBrainService {
     conflicts: any[];
     analytics_status: 'SUFFICIENT_DATA' | 'INSUFFICIENT_DATA';
     analytics_sample_count: number;
+    explanation?: string;
   }> {
     const query = brandId ? `?brand_id=${encodeURIComponent(brandId)}` : '';
     return await backendRequest<{
@@ -141,11 +142,45 @@ class FrontendBrandBrainService {
       conflicts: any[];
       analytics_status: 'SUFFICIENT_DATA' | 'INSUFFICIENT_DATA';
       analytics_sample_count: number;
+      explanation?: string;
     }>(`/brand-brain/recommendations${query}`);
   }
 
   /**
-   * Applies an explainable recommendation
+   * Approves an explainable recommendation with optional confirmation and edited value
+   */
+  async approveRecommendation(
+    recommendationId: string,
+    options?: { confirm_overwrite?: boolean; edited_value?: any; brand_id?: string }
+  ): Promise<{ profile: BrandBrainProfile; recommendation: BrandRecommendation }> {
+    const res = await backendRequest<{
+      success: boolean;
+      profile: BrandBrainProfile;
+      recommendation: BrandRecommendation;
+    }>(`/brand-brain/recommendations/${encodeURIComponent(recommendationId)}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(options || {}),
+    });
+    return { profile: res.profile, recommendation: res.recommendation };
+  }
+
+  /**
+   * Dismisses an explainable recommendation
+   */
+  async dismissRecommendation(
+    recommendationId: string
+  ): Promise<{ success: boolean; recommendation: BrandRecommendation }> {
+    return await backendRequest<{
+      success: boolean;
+      recommendation: BrandRecommendation;
+    }>(`/brand-brain/recommendations/${encodeURIComponent(recommendationId)}/dismiss`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  /**
+   * Applies an explainable recommendation (legacy)
    */
   async applyRecommendation(
     dimension: string,

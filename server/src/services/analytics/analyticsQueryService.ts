@@ -203,4 +203,12 @@ export class AnalyticsQueryService {
 
     return db.collection<ContentAnalyticsRecord>('content_analytics').aggregate(pipeline).toArray();
   }
+
+  /**
+   * Retrieves unified content performance dashboard metrics and content table.
+   */
+  public static async getDashboard(userId: string, options: any = {}) {
+    const { ContentPerformanceDashboardService } = await import('./contentPerformanceDashboardService.js');
+    return ContentPerformanceDashboardService.getDashboard(userId, options);
+  }
 }

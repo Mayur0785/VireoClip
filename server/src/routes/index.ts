@@ -12,6 +12,9 @@ import contentPackRoutes from './contentPackRoutes.js';
 import hookLabRoutes from './hookLabRoutes.js';
 import thumbnailLabRoutes from './thumbnailLabRoutes.js';
 import autopilotRoutes from './autopilotRoutes.js';
+import abStudioRoutes from './abStudioRoutes.js';
+import workflowRoutes from './workflowRoutes.js';
+import workspaceRoutes from './workspaceRoutes.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { getProfiles, saveProfiles, getCreatorProfile, updateCreatorProfile } from '../controllers/profileController.js';
@@ -36,6 +39,9 @@ apiRouter.use('/content-packs', contentPackRoutes);
 apiRouter.use('/hook-lab', hookLabRoutes);
 apiRouter.use('/thumbnail-lab', thumbnailLabRoutes);
 apiRouter.use('/autopilot', autopilotRoutes);
+apiRouter.use('/ab-studio', abStudioRoutes);
+apiRouter.use('/workflows', workflowRoutes);
+apiRouter.use('/workspaces', workspaceRoutes);
 
 export default apiRouter;
 

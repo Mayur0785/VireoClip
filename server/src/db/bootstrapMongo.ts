@@ -237,8 +237,40 @@ export async function bootstrapMongo(db?: Db): Promise<void> {
     database.collection('autopilot_runs').createIndex({ clip_id: 1, created_at: -1 }),
     database.collection('autopilot_runs').createIndex({ project_id: 1 }),
     database.collection('autopilot_runs').createIndex({ status: 1 }),
+    // Phase 27: A/B Testing Studio indexes
+    database.collection('ab_experiments').createIndex({ id: 1 }, { unique: true }),
+    database.collection('ab_experiments').createIndex({ user_id: 1, created_at: -1 }),
+    database.collection('ab_experiments').createIndex({ clip_id: 1, created_at: -1 }),
+    database.collection('ab_experiments').createIndex({ project_id: 1 }),
+    database.collection('ab_experiments').createIndex({ status: 1 }),
+    database.collection('ab_observation_logs').createIndex({ id: 1 }, { unique: true }),
+    database.collection('ab_observation_logs').createIndex({ idempotency_key: 1 }, { unique: true }),
+    database.collection('ab_observation_logs').createIndex({ experiment_id: 1, variant_id: 1 }),
+    database.collection('ab_observation_logs').createIndex({ user_id: 1, created_at: -1 }),
+    // Phase 34: Brand Brain Intelligence indexes
+    database.collection('brand_recommendations').createIndex({ id: 1 }, { unique: true }),
+    database.collection('brand_recommendations').createIndex({ user_id: 1, created_at: -1 }),
+    database.collection('brand_recommendations').createIndex({ user_id: 1, status: 1 }),
+    database.collection('brand_recommendations').createIndex({ user_id: 1, brand_brain_id: 1 }),
+    // Phase 36: Content Workflow Automation indexes
+    database.collection('content_workflows').createIndex({ id: 1 }, { unique: true }),
+    database.collection('content_workflows').createIndex({ user_id: 1, created_at: -1 }),
+    database.collection('content_workflows').createIndex({ user_id: 1, current_state: 1 }),
+    database.collection('content_workflows').createIndex({ clip_id: 1 }),
+    database.collection('content_workflows').createIndex({ project_id: 1 }),
+    // Phase 38: Workspace & Team Permissions indexes
+    database.collection('workspaces').createIndex({ id: 1 }, { unique: true }),
+    database.collection('workspaces').createIndex({ owner_id: 1 }),
+    database.collection('workspaces').createIndex(
+      { owner_id: 1, is_personal: 1 },
+      { unique: true, partialFilterExpression: { is_personal: true } }
+    ),
+    database.collection('workspace_members').createIndex({ id: 1 }, { unique: true }),
+    database.collection('workspace_members').createIndex({ workspace_id: 1, user_id: 1 }, { unique: true }),
+    database.collection('workspace_members').createIndex({ user_id: 1 }),
+    database.collection('workspace_invitations').createIndex({ id: 1 }, { unique: true }),
+    database.collection('workspace_invitations').createIndex({ token_hash: 1 }, { unique: true }),
+    database.collection('workspace_invitations').createIndex({ workspace_id: 1, status: 1 }),
+    database.collection('workspace_invitations').createIndex({ expires_at: 1 }),
   ]);
 }
-
-
-

@@ -18,15 +18,21 @@ import {
   Shield,
   TrendingUp,
   Brain,
+  FlaskConical,
+  CheckSquare,
+  Building2,
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/workspaces', label: 'Workspaces', icon: Building2 },
+  { to: '/workflows', label: 'Workflows', icon: CheckSquare },
   { to: '/projects/new', label: 'New Project', icon: PlusCircle },
   { to: '/brand', label: 'Brand Brain', icon: Brain },
   { to: '/analytics', label: 'Analytics', icon: TrendingUp },
+  { to: '/ab-testing', label: 'A/B Studio', icon: FlaskConical },
   { to: '/publishing', label: 'Publishing', icon: Share2 },
   { to: '/billing', label: 'Billing & Plans', icon: CreditCard },
   { to: '/history', label: 'History', icon: History },

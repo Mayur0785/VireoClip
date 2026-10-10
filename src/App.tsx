@@ -19,16 +19,25 @@ const AnalyticsPage = React.lazy(() => import('./pages/AnalyticsPage').then(m =>
 const BillingPage = React.lazy(() => import('./pages/BillingPage').then(m => ({ default: m.BillingPage })));
 const ClipEditorPage = React.lazy(() => import('./pages/ClipEditorPage').then(m => ({ default: m.ClipEditorPage })));
 const AdminPage = React.lazy(() => import('./pages/AdminPage').then(m => ({ default: m.AdminPage })));
+const ABStudioHistoryPage = React.lazy(() => import('./pages/ABStudioHistoryPage').then(m => ({ default: m.ABStudioHistoryPage })));
+const WorkflowPage = React.lazy(() => import('./pages/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
+const WorkspacePage = React.lazy(() => import('./pages/WorkspacePage').then(m => ({ default: m.WorkspacePage })));
+const TermsPage = React.lazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })));
+const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
+import { CookieNotice } from './components/CookieNotice';
 
 export const App: React.FC = () => {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <CookieNotice />
         <React.Suspense fallback={<div className="mx-auto mt-20 h-40 w-full max-w-6xl animate-pulse rounded-2xl bg-white" aria-label="Loading page" />}><Routes>
           {/* Public marketing layout with top navbar & footer */}
           <Route element={<RootLayout />}>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/terms" element={<TermsPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
 
@@ -42,6 +51,8 @@ export const App: React.FC = () => {
           <Route element={<ProtectedRoute />}>
             <Route element={<DashboardLayout />}>
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/workflows" element={<WorkflowPage />} />
+              <Route path="/workspaces" element={<WorkspacePage />} />
               <Route path="/projects/new" element={<NewProjectPage />} />
               <Route path="/new" element={<Navigate to="/projects/new" replace />} />
               <Route path="/projects/:id" element={<ProjectDetailPage />} />
@@ -49,6 +60,7 @@ export const App: React.FC = () => {
               <Route path="/brand" element={<BrandPage />} />
               <Route path="/publishing" element={<PublishingHistoryPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/ab-testing" element={<ABStudioHistoryPage />} />
               <Route path="/billing" element={<BillingPage />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/admin" element={<AdminPage />} />

@@ -45,7 +45,9 @@ export const config = {
   ffmpegTimeoutMs: parseInt(process.env.FFMPEG_TIMEOUT_MS || '180000', 10),
   clipRenderTimeoutMs: parseInt(process.env.CLIP_RENDER_TIMEOUT_MS || '300000', 10),
   // Social OAuth & Encryption (Phase 9)
-  socialTokenEncryptionKey: process.env.SOCIAL_TOKEN_ENCRYPTION_KEY || 'default-dev-social-token-encryption-key-32-chars-long!',
+  socialTokenEncryptionKey:
+    process.env.SOCIAL_TOKEN_ENCRYPTION_KEY ||
+    (process.env.NODE_ENV === 'production' ? '' : 'default-dev-social-token-encryption-key-32-chars-long!'),
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
   googleRedirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:5000/api/social/youtube/callback',
@@ -107,46 +109,247 @@ export const config = {
 } as const;
 
 /**
- * Validates that all critical environment variables are present.
- * Fails fast in production; warns in development.
+ * Validates the SOCIAL_TOKEN_ENCRYPTION_KEY according to cryptographic requirements.
+ * AES-256-GCM requires a 32-byte key (256 bits).
+ *
+ * Supported formats:
+ * 1. 64 hexadecimal characters (/^[0-9a-fA-F]{64}$/): Decodes directly to 32 bytes.
+ * 2. 0x-prefixed 64 hexadecimal characters (66 chars total): Decodes directly to 32 bytes.
+ * 3. Raw secret string: Must contain at least 32 bytes (Buffer.byteLength(key, 'utf8') >= 32).
+ *    Note: Character count does NOT equal byte count for multi-byte UTF-8 sequences.
+ *
+ * Never logs or reveals the secret value itself in error messages.
  */
-export function validateEnvironment(): void {
+export function validateSocialTokenEncryptionKey(
+  secret?: string,
+  _isProduction: boolean = false
+): { valid: boolean; error?: string } {
+  if (!secret || secret.trim().length === 0) {
+    return {
+      valid: false,
+      error: 'SOCIAL_TOKEN_ENCRYPTION_KEY environment variable is missing or empty.',
+    };
+  }
+
+  const trimmed = secret.trim();
+
+  // 0x-prefixed hex string (66 characters total)
+  if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
+    const hexPart = trimmed.slice(2);
+    if (hexPart.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(hexPart)) {
+      return {
+        valid: false,
+        error:
+          'SOCIAL_TOKEN_ENCRYPTION_KEY is malformed: 0x-prefixed key must contain exactly 64 hexadecimal characters (32 bytes).',
+      };
+    }
+    return { valid: true };
+  }
+
+  // Enforce minimum 32 bytes (256 bits of key material)
+  const byteLength = Buffer.byteLength(trimmed, 'utf8');
+  if (byteLength < 32) {
+    return {
+      valid: false,
+      error: `SOCIAL_TOKEN_ENCRYPTION_KEY is invalid: key byte length is ${byteLength} bytes. AES-256 requires at least 32 bytes (256 bits) or a 64-character hex string.`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Checks whether a given billing provider is enabled.
+ * A provider is enabled if:
+ * 1. It is not explicitly disabled via <PROVIDER>_ENABLED=false
+ * 2. AND either it is explicitly enabled via <PROVIDER>_ENABLED=true,
+ *    it is the default provider (BILLING_PROVIDER_DEFAULT),
+ *    or its API credentials are configured in the environment.
+ */
+export function isBillingProviderEnabled(
+  provider: 'paddle' | 'razorpay' | 'stripe',
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const providerLower = provider.toLowerCase();
+
+  if (providerLower === 'paddle') {
+    if (env.PADDLE_ENABLED === 'false') return false;
+    if (env.PADDLE_ENABLED === 'true') return true;
+    const defaultProvider = env.BILLING_PROVIDER_DEFAULT || config.billingProviderDefault || 'paddle';
+    return defaultProvider === 'paddle' || Boolean(env.PADDLE_API_KEY || config.paddleApiKey);
+  }
+
+  if (providerLower === 'razorpay') {
+    if (env.RAZORPAY_ENABLED === 'false') return false;
+    if (env.RAZORPAY_ENABLED === 'true') return true;
+    const defaultProvider = env.BILLING_PROVIDER_DEFAULT || config.billingProviderDefault;
+    return defaultProvider === 'razorpay' || Boolean(env.RAZORPAY_KEY_ID || env.RAZORPAY_KEY_SECRET || config.razorpayKeyId || config.razorpayKeySecret);
+  }
+
+  if (providerLower === 'stripe') {
+    if (env.STRIPE_ENABLED === 'false') return false;
+    if (env.STRIPE_ENABLED === 'true') return true;
+    const defaultProvider = env.BILLING_PROVIDER_DEFAULT || config.billingProviderDefault;
+    return defaultProvider === 'stripe' || Boolean(env.STRIPE_SECRET_KEY || config.stripeSecretKey);
+  }
+
+  return false;
+}
+
+export interface EnvironmentValidationResult {
+  valid: boolean;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ValidateEnvironmentOptions {
+  isProduction?: boolean;
+  exitOnError?: boolean;
+  throwOnError?: boolean;
+  env?: NodeJS.ProcessEnv;
+}
+
+/**
+ * Validates that all critical environment variables are present and secure.
+ * - In production: Fails fast on missing or malformed infrastructure, encryption, or billing secrets.
+ * - In development: Warns of missing variables while preserving dev workflow.
+ */
+export function validateEnvironment(options: ValidateEnvironmentOptions = {}): EnvironmentValidationResult {
+  const env = options.env || process.env;
+  const isProd =
+    options.isProduction ??
+    (env.NODE_ENV === 'production' || config.isProduction);
+
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // 1. Critical Base Infrastructure Variables
   const critical: Array<{ name: string; value: string; required: boolean }> = [
-    { name: 'SUPABASE_URL', value: config.supabaseUrl, required: true },
-    { name: 'SUPABASE_SECRET_KEY', value: config.supabaseSecretKey, required: true },
-    { name: 'MONGODB_URI', value: config.mongodbUri, required: true },
-    { name: 'MONGODB_DB_NAME', value: config.mongodbDbName, required: true },
-    { name: 'R2_ACCOUNT_ID', value: config.r2AccountId, required: true },
-    { name: 'R2_ACCESS_KEY_ID', value: config.r2AccessKeyId, required: true },
-    { name: 'R2_SECRET_ACCESS_KEY', value: config.r2SecretAccessKey, required: true },
-    { name: 'CORS_ORIGIN', value: config.corsOrigin, required: false },
+    { name: 'SUPABASE_URL', value: env.SUPABASE_URL || config.supabaseUrl, required: true },
+    { name: 'SUPABASE_SECRET_KEY', value: env.SUPABASE_SECRET_KEY || config.supabaseSecretKey, required: true },
+    { name: 'MONGODB_URI', value: env.MONGODB_URI || config.mongodbUri, required: true },
+    { name: 'MONGODB_DB_NAME', value: env.MONGODB_DB_NAME || config.mongodbDbName, required: true },
+    { name: 'R2_ACCOUNT_ID', value: env.R2_ACCOUNT_ID || config.r2AccountId, required: true },
+    { name: 'R2_ACCESS_KEY_ID', value: env.R2_ACCESS_KEY_ID || config.r2AccessKeyId, required: true },
+    { name: 'R2_SECRET_ACCESS_KEY', value: env.R2_SECRET_ACCESS_KEY || config.r2SecretAccessKey, required: true },
+    { name: 'CORS_ORIGIN', value: env.CORS_ORIGIN || config.corsOrigin, required: false },
   ];
 
-  const missing = critical.filter((v) => v.required && !v.value);
-
-  if (missing.length > 0) {
-    const names = missing.map((v) => v.name).join(', ');
-    if (config.isProduction) {
-      console.error(`[FATAL] Missing required environment variables: ${names}`);
-      process.exit(1);
-    } else {
-      console.warn(
-        `[WARN] Missing environment variables: ${names}. ` +
-          'Backend will operate in degraded mode. Add these to .env or .env.local.'
-      );
+  for (const item of critical) {
+    if (item.required && !item.value) {
+      errors.push(`Missing required environment variable: ${item.name}`);
     }
   }
 
-  // Check transcription provider credentials
-  const provider = (config.transcriptionProvider || 'groq').toLowerCase().trim();
-  if (provider === 'groq' && !config.groqApiKey) {
-    console.warn('[WARN] TRANSCRIPTION_PROVIDER is set to "groq" but GROQ_API_KEY is not configured.');
-  } else if (provider === 'openrouter' && !config.openrouterApiKey) {
-    console.warn('[WARN] TRANSCRIPTION_PROVIDER is set to "openrouter" but OPENROUTER_API_KEY is not configured.');
+  // 2. Social Token Encryption Key (Task 1)
+  const encryptionKey =
+    env.SOCIAL_TOKEN_ENCRYPTION_KEY ??
+    (isProd ? config.socialTokenEncryptionKey : (config.socialTokenEncryptionKey || 'default-dev-social-token-encryption-key-32-chars-long!'));
+
+  if (isProd) {
+    if (!encryptionKey || encryptionKey.trim().length === 0) {
+      errors.push(
+        'Missing required environment variable: SOCIAL_TOKEN_ENCRYPTION_KEY. A 32-byte (or 64-hex) key is required in production.'
+      );
+    } else {
+      const keyValidation = validateSocialTokenEncryptionKey(encryptionKey, true);
+      if (!keyValidation.valid && keyValidation.error) {
+        errors.push(keyValidation.error);
+      }
+    }
+  } else {
+    // Non-production warning
+    if (!encryptionKey) {
+      warnings.push(
+        'SOCIAL_TOKEN_ENCRYPTION_KEY is not configured; using dev fallback key. Do NOT use this fallback in production.'
+      );
+    } else {
+      const keyValidation = validateSocialTokenEncryptionKey(encryptionKey, false);
+      if (!keyValidation.valid && keyValidation.error) {
+        warnings.push(`SOCIAL_TOKEN_ENCRYPTION_KEY warning: ${keyValidation.error}`);
+      }
+    }
   }
 
-  // Warn if text generation key is absent
-  if (!config.openrouterApiKey) {
-    console.warn('[WARN] OPENROUTER_API_KEY is not configured. AI content generation will fail until set.');
+  // 3. Billing Webhook Secrets (Task 2)
+  if (isBillingProviderEnabled('paddle', env)) {
+    const paddleSecret = env.PADDLE_WEBHOOK_SECRET || config.paddleWebhookSecret;
+    if (!paddleSecret || paddleSecret.trim().length === 0) {
+      if (isProd) {
+        errors.push(
+          'Missing required environment variable for enabled billing provider: PADDLE_WEBHOOK_SECRET. Required for Paddle webhook signature verification.'
+        );
+      } else {
+        warnings.push(
+          'PADDLE_WEBHOOK_SECRET is not configured for enabled Paddle provider. Webhook signature verification will fail.'
+        );
+      }
+    }
   }
+
+  if (isBillingProviderEnabled('razorpay', env)) {
+    const razorpaySecret = env.RAZORPAY_WEBHOOK_SECRET || config.razorpayWebhookSecret;
+    if (!razorpaySecret || razorpaySecret.trim().length === 0) {
+      if (isProd) {
+        errors.push(
+          'Missing required environment variable for enabled billing provider: RAZORPAY_WEBHOOK_SECRET. Required for Razorpay HMAC signature verification.'
+        );
+      } else {
+        warnings.push(
+          'RAZORPAY_WEBHOOK_SECRET is not configured for enabled Razorpay provider. Webhook signature verification will fail.'
+        );
+      }
+    }
+  }
+
+  if (isBillingProviderEnabled('stripe', env)) {
+    const stripeSecret = env.STRIPE_WEBHOOK_SECRET || config.stripeWebhookSecret;
+    if (!stripeSecret || stripeSecret.trim().length === 0) {
+      if (isProd) {
+        errors.push(
+          'Missing required environment variable for enabled billing provider: STRIPE_WEBHOOK_SECRET. Required for Stripe webhook signature verification.'
+        );
+      } else {
+        warnings.push(
+          'STRIPE_WEBHOOK_SECRET is not configured for enabled Stripe provider. Webhook signature verification will fail.'
+        );
+      }
+    }
+  }
+
+  // 4. Transcription & AI warnings
+  const provider = (config.transcriptionProvider || 'groq').toLowerCase().trim();
+  if (provider === 'groq' && !config.groqApiKey) {
+    warnings.push('TRANSCRIPTION_PROVIDER is set to "groq" but GROQ_API_KEY is not configured.');
+  } else if (provider === 'openrouter' && !config.openrouterApiKey) {
+    warnings.push('TRANSCRIPTION_PROVIDER is set to "openrouter" but OPENROUTER_API_KEY is not configured.');
+  }
+
+  if (!config.openrouterApiKey) {
+    warnings.push('OPENROUTER_API_KEY is not configured. AI content generation will fail until set.');
+  }
+
+  // 5. Output handling & Process Exit
+  const valid = errors.length === 0;
+
+  if (!valid) {
+    const errMsg = errors.join('; ');
+    if (isProd) {
+      console.error(`[FATAL] Production environment validation failed:\n  - ${errors.join('\n  - ')}`);
+      if (options.throwOnError) {
+        throw new Error(`Production environment validation failed: ${errMsg}`);
+      }
+      if (options.exitOnError !== false) {
+        process.exit(1);
+      }
+    } else {
+      console.warn(`[WARN] Environment validation warnings:\n  - ${errors.concat(warnings).join('\n  - ')}`);
+    }
+  } else if (warnings.length > 0) {
+    for (const w of warnings) {
+      console.warn(`[WARN] ${w}`);
+    }
+  }
+
+  return { valid, errors, warnings };
 }
