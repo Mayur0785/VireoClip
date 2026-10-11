@@ -205,7 +205,106 @@
 .animate-social-bob-3 { animation: social-bob 3.5s ease-in-out infinite 0.8s; }
 .animate-social-bob-4 { animation: social-bob 3.0s ease-in-out infinite 1.2s; }
 .animate-social-bob-5 { animation: social-bob 3.4s ease-in-out infinite 1.6s; }
-.animate-social-bob-6 { animation: social-bob 2.9s ease-in-out infinite 2.0s; }
+/* --- Dashboard Reference Design Tokens & Glass Styles --- */
+.vireo-dash-glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 20px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.vireo-dash-hero {
+  position: relative;
+  border-radius: 28px;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  background: linear-gradient(180deg, rgba(139, 92, 246, 0.16), rgba(255, 255, 255, 0.03) 60%, rgba(34, 211, 238, 0.05));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6), 0 0 45px rgba(139, 92, 246, 0.14);
+  overflow: hidden;
+}
+
+.vireo-dash-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse at 50% 30%, #000, transparent 72%);
+  mask-image: radial-gradient(ellipse at 50% 30%, #000, transparent 72%);
+}
+
+.vireo-clipcard-left {
+  position: absolute;
+  left: clamp(24px, 3.2vw, 44px);
+  top: clamp(48px, 6.5vh, 76px);
+  width: 144px;
+  height: 248px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.65), 0 0 30px rgba(139, 92, 246, 0.18);
+  transform: rotate(-7deg);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 11px;
+  z-index: 1;
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.vireo-clipcard-left:hover {
+  transform: rotate(-2deg) translateY(-6px) scale(1.04);
+  border-color: rgba(139, 92, 246, 0.55);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.75), 0 0 40px rgba(139, 92, 246, 0.35);
+}
+
+.vireo-clipcard-right {
+  position: absolute;
+  right: clamp(24px, 3.2vw, 44px);
+  top: clamp(48px, 6.5vh, 76px);
+  width: 144px;
+  height: 248px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.65), 0 0 30px rgba(34, 211, 238, 0.18);
+  transform: rotate(7deg);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 11px;
+  z-index: 1;
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.vireo-clipcard-right:hover {
+  transform: rotate(2deg) translateY(-6px) scale(1.04);
+  border-color: rgba(34, 211, 238, 0.55);
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.75), 0 0 40px rgba(34, 211, 238, 0.35);
+}
+
+.vireo-btn-purple {
+  background: linear-gradient(135deg, #8B5CF6, #6D4AFF);
+  box-shadow: 0 8px 24px rgba(109, 74, 255, 0.35);
+  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.vireo-btn-purple:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(109, 74, 255, 0.45);
+}
+
+.vireo-nav-active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.22), rgba(109, 74, 255, 0.12));
+  color: #FFFFFF !important;
+  font-weight: 600;
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+}
 
 /* --- Strict Prefers-Reduced-Motion Override --- */
 @media (prefers-reduced-motion: reduce) {

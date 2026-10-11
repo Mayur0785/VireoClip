@@ -63,6 +63,7 @@ export interface Project {
   source_url?: string | null;
   video_url?: string | null;
   notes?: string;
+  description?: string | null;
   status: ProjectStatus;
   video_status?: ProjectStatus;
   created_at: string;
