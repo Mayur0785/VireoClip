@@ -156,7 +156,12 @@ export const TermsPage: React.FC = () => {
               Questions, notices, or inquiries regarding these Terms should be directed to:
             </p>
             <p className="mt-1 font-mono text-xs text-[#36764c]">
-              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono text-xs">[CONFIRMATION REQUIRED: Designated Support / Legal Email Address, e.g., legal@vireo.app]</span>
+              <a
+                href="mailto:vertexdigitals07@gmail.com"
+                className="font-medium text-[#246844] underline hover:text-[#183d2d]"
+              >
+                vertexdigitals07@gmail.com
+              </a>
             </p>
           </section>
         </div>

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import mark from "../assets/brand/vireo-mark.svg";
-import lightLogo from "../assets/brand/vireo-logo-light.svg";
+import vireoLogo from "../assets/brand/vireo-logo-purple.png";
+import vireoMark from "../assets/brand/vireo-mark-purple.png";
 
 export interface LogoProps {
   to?: string;
@@ -13,36 +13,48 @@ export function Logo({
   to = "/",
   className = "",
   compact = false,
-  light = false,
 }: LogoProps) {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (to === "/" && (window.location.pathname === "/" || window.location.pathname === "")) {
+      e.preventDefault();
+      if (window.location.hash) {
+        window.history.pushState(null, '', '/');
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else if (to === "/") {
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 50);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLAnchorElement>) => {
+    if (to === "/" && (e.key === "Enter" || e.key === " " || e.key === "Spacebar")) {
+      e.preventDefault();
+      (e.currentTarget as HTMLAnchorElement).click();
+    }
+  };
+
   return (
     <Link
       to={to}
-      aria-label="Vireo home"
-      className={`inline-flex items-center gap-2 group ${className}`}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      aria-label="VireoClip home - scroll to top"
+      className={`inline-flex items-center gap-2 group focus:outline-hidden ${className}`}
     >
-      {light && !compact ? (
+      {compact ? (
         <img
-          src={lightLogo}
-          alt=""
-          className="h-10 w-auto transition-transform group-hover:scale-105"
+          src={vireoMark}
+          alt="VireoClip"
+          className="size-8 sm:size-9 shrink-0 object-contain transition-transform duration-200 group-hover:scale-105"
         />
       ) : (
-        <>
-          <img
-            src={mark}
-            alt=""
-            className="size-9 shrink-0 transition-transform group-hover:scale-105"
-          />
-          {!compact && (
-            <span className="text-[27px] font-bold tracking-[-0.07em] leading-none text-forest inline-flex items-center gap-1.5">
-              Vireo
-              <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-clay/10 text-clay border border-clay/20 font-sans tracking-normal">
-                Beta
-              </span>
-            </span>
-          )}
-        </>
+        <img
+          src={vireoLogo}
+          alt="VireoClip"
+          className="h-9 sm:h-10 w-auto max-w-[210px] object-contain shrink-0 transition-transform duration-200 group-hover:scale-105 drop-shadow-[0_2px_10px_rgba(139,92,246,0.15)]"
+        />
       )}
     </Link>
   );

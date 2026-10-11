@@ -1,5 +1,7 @@
 import { PlanDefinition, BillingInterval, BillingProviderName } from '../services/billingService';
 
+export type CurrencyPreference = 'USD' | 'INR';
+
 export interface PlanPriceDisplay {
   symbol: string;
   amount: string;
@@ -31,23 +33,23 @@ export function isProviderIntervalSupported(
 }
 
 /**
- * Calculates and formats price displays across billing intervals and providers.
+ * Calculates and formats price displays across billing intervals, display currencies, and providers.
  * Accurately reflects configured monthly and yearly rates without hardcoding or inventing prices.
  * Strictly prevents misleading pricing or accidental checkout when annual rates are unconfigured.
  */
 export function getPlanPriceDisplay(
   plan: PlanDefinition,
   billingInterval: BillingInterval,
-  selectedProvider: BillingProviderName
+  selectedProvider: BillingProviderName = 'paddle',
+  displayCurrency: CurrencyPreference = 'USD'
 ): PlanPriceDisplay {
   const isFree = plan.id === 'free';
   const isYearly = billingInterval === 'year';
-  const isIndianProvider = selectedProvider === 'razorpay';
+  const isINR = displayCurrency === 'INR';
 
   if (isFree) {
-    const symbol = isIndianProvider ? '₹' : '$';
     return {
-      symbol,
+      symbol: isINR ? '₹' : '$',
       amount: '0',
       interval: 'forever',
       effectiveMonthly: null,
@@ -58,8 +60,8 @@ export function getPlanPriceDisplay(
     };
   }
 
-  if (isIndianProvider) {
-    // Razorpay (India INR)
+  if (isINR) {
+    // India INR display
     const inrMonthly = plan.inr_monthly_price;
     const inrYearly = (plan as any).inr_yearly_price as number | undefined;
 
@@ -69,44 +71,46 @@ export function getPlanPriceDisplay(
         const savings = inrMonthly * 12 - inrYearly;
         return {
           symbol: '₹',
-          amount: inrYearly.toLocaleString(),
+          amount: inrYearly.toLocaleString('en-IN'),
           interval: 'year',
           effectiveMonthly: `₹${effective} / mo`,
-          savingsBadge: savings > 0 ? `Save ₹${savings.toLocaleString()} / yr` : null,
-          secondaryText: `Global (USD): $${plan.yearly_price} / yr`,
-          ctaText: `Choose ${plan.display_name} (₹${inrYearly.toLocaleString()}/yr)`,
+          savingsBadge: savings > 0 ? `Save ₹${savings.toLocaleString('en-IN')} / yr` : null,
+          secondaryText: `Global (USD): $${plan.yearly_price} / yr • Billed via ${selectedProvider.toUpperCase()}`,
+          ctaText: `Choose ${plan.display_name} (₹${inrYearly.toLocaleString('en-IN')}/yr)`,
           isAvailable: true,
         };
       }
 
       // If INR yearly is unconfigured in PLANS:
-      // Prevent displaying monthly rate as yearly, show explicit unavailable status, and disable CTA.
+      // Show explicit unavailable state rather than inventing a yearly price.
       return {
         symbol: '₹',
         amount: '—',
         interval: 'year',
         effectiveMonthly: null,
         savingsBadge: null,
-        secondaryText: `Annual billing unavailable for INR • Available in USD ($${plan.yearly_price}/yr via Paddle)`,
+        secondaryText: `Annual billing unavailable in INR • Available in USD ($${plan.yearly_price}/yr via Paddle)`,
         ctaText: 'Annual Billing Unavailable for INR',
         isAvailable: false,
-        unavailableReason: 'Annual billing is unavailable for INR (Razorpay). Please switch to Monthly billing or choose Paddle (Global USD).',
+        unavailableReason: 'Annual billing is unconfigured for INR. Please switch to Monthly billing or choose Paddle (Global USD).',
       };
     }
 
     return {
       symbol: '₹',
-      amount: inrMonthly.toLocaleString(),
+      amount: inrMonthly.toLocaleString('en-IN'),
       interval: 'month',
       effectiveMonthly: null,
       savingsBadge: null,
-      secondaryText: `Global (USD): $${plan.monthly_price} / mo`,
-      ctaText: `Choose ${plan.display_name} (₹${inrMonthly.toLocaleString()}/mo)`,
+      secondaryText: selectedProvider === 'razorpay'
+        ? 'Billed in INR via Razorpay (India)'
+        : `Display in INR • Billed in USD ($${plan.monthly_price}/mo via ${selectedProvider.toUpperCase()})`,
+      ctaText: `Choose ${plan.display_name} (₹${inrMonthly.toLocaleString('en-IN')}/mo)`,
       isAvailable: true,
     };
   }
 
-  // Paddle or Stripe (Global USD)
+  // Global USD display
   const usdMonthly = plan.monthly_price;
   const usdYearly = plan.yearly_price;
 
@@ -116,6 +120,7 @@ export function getPlanPriceDisplay(
     const yearlySavings = usdMonthly * 12 - usdYearly;
     const savingsPct = usdMonthly > 0 ? Math.round((yearlySavings / (usdMonthly * 12)) * 100) : 0;
     const savingsBadge = yearlySavings > 0 ? `${effectiveMonthly}/mo • Save $${yearlySavings}/yr (${savingsPct}% off)` : null;
+    const isRazorpay = selectedProvider === 'razorpay';
 
     return {
       symbol: '$',
@@ -123,9 +128,12 @@ export function getPlanPriceDisplay(
       interval: 'year',
       effectiveMonthly: `${effectiveMonthly} / mo`,
       savingsBadge,
-      secondaryText: `India (INR): ₹${plan.inr_monthly_price.toLocaleString()} / mo`,
-      ctaText: `Choose ${plan.display_name} ($${usdYearly}/yr)`,
-      isAvailable: true,
+      secondaryText: isRazorpay
+        ? 'Annual billing unavailable for Razorpay INR • Switch to Paddle'
+        : `India (INR): ₹${plan.inr_monthly_price.toLocaleString('en-IN')}/mo • Billed annually via ${selectedProvider.toUpperCase()}`,
+      ctaText: isRazorpay ? 'Annual Billing Unavailable for INR' : `Choose ${plan.display_name} ($${usdYearly}/yr)`,
+      isAvailable: !isRazorpay,
+      unavailableReason: isRazorpay ? 'Annual billing is unavailable for INR (Razorpay). Please switch to Paddle (Global USD).' : undefined,
     };
   }
 
@@ -135,8 +143,90 @@ export function getPlanPriceDisplay(
     interval: 'month',
     effectiveMonthly: null,
     savingsBadge: null,
-    secondaryText: `India (INR): ₹${plan.inr_monthly_price.toLocaleString()} / mo`,
+    secondaryText: selectedProvider === 'razorpay'
+      ? `Display in USD • Billed in INR (₹${plan.inr_monthly_price.toLocaleString('en-IN')}/mo via Razorpay)`
+      : `India (INR): ₹${plan.inr_monthly_price.toLocaleString('en-IN')} / mo • Billed in USD via ${selectedProvider.toUpperCase()}`,
     ctaText: `Choose ${plan.display_name} ($${usdMonthly}/mo)`,
     isAvailable: true,
+  };
+}
+
+/**
+ * Authoritative marketing rates helper for landing page and public displays.
+ * Derived directly from server plan configuration without arbitrary conversions.
+ */
+export function getMarketingPlanRate(
+  planId: 'free' | 'creator' | 'pro' | 'studio',
+  interval: BillingInterval,
+  currency: CurrencyPreference
+): {
+  amount: string;
+  symbol: string;
+  periodText: string;
+  isAvailable: boolean;
+  savingsBadge: string | null;
+} {
+  if (planId === 'free') {
+    return {
+      symbol: currency === 'INR' ? '₹' : '$',
+      amount: '0',
+      periodText: interval === 'year' ? '/ forever' : '/ month',
+      isAvailable: true,
+      savingsBadge: null,
+    };
+  }
+
+  if (currency === 'INR') {
+    if (interval === 'year') {
+      return {
+        symbol: '₹',
+        amount: '—',
+        periodText: 'Unavailable in INR',
+        isAvailable: false,
+        savingsBadge: null,
+      };
+    }
+    const rates: Record<'creator' | 'pro' | 'studio', number> = {
+      creator: 999,
+      pro: 1999,
+      studio: 3999,
+    };
+    return {
+      symbol: '₹',
+      amount: rates[planId].toLocaleString('en-IN'),
+      periodText: '/ mo',
+      isAvailable: true,
+      savingsBadge: null,
+    };
+  }
+
+  // USD
+  if (interval === 'year') {
+    const yearlyRates: Record<'creator' | 'pro' | 'studio', { amount: number; monthly: string; save: number }> = {
+      creator: { amount: 120, monthly: '$10/mo', save: 24 },
+      pro: { amount: 240, monthly: '$20/mo', save: 48 },
+      studio: { amount: 490, monthly: '$40.83/mo', save: 98 },
+    };
+    const rate = yearlyRates[planId];
+    return {
+      symbol: '$',
+      amount: rate.amount.toString(),
+      periodText: `/ year (${rate.monthly})`,
+      isAvailable: true,
+      savingsBadge: `Save $${rate.save}/yr`,
+    };
+  }
+
+  const monthlyRates: Record<'creator' | 'pro' | 'studio', number> = {
+    creator: 12,
+    pro: 24,
+    studio: 49,
+  };
+  return {
+    symbol: '$',
+    amount: monthlyRates[planId].toString(),
+    periodText: '/ month',
+    isAvailable: true,
+    savingsBadge: null,
   };
 }

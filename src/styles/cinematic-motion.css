@@ -1,0 +1,231 @@
+/* =========================================================================
+   Vireo Cinematic Motion Design System
+   Cinematic SaaS animation language:
+   - Smooth scroll-triggered section reveals with subtle camera zoom
+   - Floating glassmorphism cards with gentle parallax & tilt
+   - Ambient spotlight breathing and light trails
+   - Staggered coordinated sequences (headings -> controls -> cards)
+   - Audio waveform dynamics
+   - Strict prefers-reduced-motion compliance
+   ========================================================================= */
+
+/* --- Base Reveal Transitions --- */
+.cinematic-reveal-init {
+  opacity: 0;
+  transform: translate3d(0, 24px, 0) scale(0.985);
+  transition:
+    opacity 650ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 750ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+.cinematic-reveal-init.is-revealed {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+/* Stagger Delays for Coordinated Sequences */
+.stagger-1 { transition-delay: 50ms; }
+.stagger-2 { transition-delay: 130ms; }
+.stagger-3 { transition-delay: 210ms; }
+.stagger-4 { transition-delay: 290ms; }
+.stagger-5 { transition-delay: 370ms; }
+.stagger-6 { transition-delay: 450ms; }
+
+/* Camera-like Deep Zoom Panel Reveal */
+.cinematic-panel-enter {
+  opacity: 0;
+  transform: translate3d(0, 32px, 0) scale(0.97);
+  transition:
+    opacity 800ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 900ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 800ms ease;
+  will-change: opacity, transform;
+}
+
+.cinematic-panel-enter.is-revealed {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 35px rgba(32, 227, 162, 0.08);
+}
+
+/* --- Ambient Floating Animations for Showcase Cards --- */
+@keyframes cinematic-float-1 {
+  0%, 100% {
+    transform: translateY(0px) rotate(var(--base-rot, 0deg));
+  }
+  50% {
+    transform: translateY(-9px) rotate(calc(var(--base-rot, 0deg) + 1.2deg));
+  }
+}
+
+@keyframes cinematic-float-2 {
+  0%, 100% {
+    transform: translateY(0px) rotate(var(--base-rot, 0deg));
+  }
+  50% {
+    transform: translateY(8px) rotate(calc(var(--base-rot, 0deg) - 1.4deg));
+  }
+}
+
+@keyframes cinematic-float-3 {
+  0%, 100% {
+    transform: translateY(0px) rotate(var(--base-rot, 0deg));
+  }
+  50% {
+    transform: translateY(-7px) rotate(calc(var(--base-rot, 0deg) - 1deg));
+  }
+}
+
+.animate-float-1 {
+  animation: cinematic-float-1 6.5s ease-in-out infinite;
+}
+
+.animate-float-2 {
+  animation: cinematic-float-2 7.8s ease-in-out infinite;
+}
+
+.animate-float-3 {
+  animation: cinematic-float-3 7.1s ease-in-out infinite;
+}
+
+/* --- Animated Gradient Shimmer for "Best Content Out" --- */
+@keyframes text-shimmer-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.shimmer-gradient-text {
+  background: linear-gradient(
+    90deg,
+    #20E3A2 0%,
+    #00DCC8 25%,
+    #A7F3D0 50%,
+    #00DCC8 75%,
+    #20E3A2 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer-pan 7s ease infinite;
+}
+
+/* --- Soft Glowing Light Trails and Border Shimmer --- */
+@keyframes glow-pulse-trail {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(0.995);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.005);
+  }
+}
+
+.animate-glow-trail {
+  animation: glow-pulse-trail 4.5s ease-in-out infinite;
+}
+
+/* Subtle Spotlight Drift */
+@keyframes spotlight-drift {
+  0% {
+    transform: translate(-10%, -10%) scale(1);
+    opacity: 0.14;
+  }
+  50% {
+    transform: translate(10%, 8%) scale(1.08);
+    opacity: 0.22;
+  }
+  100% {
+    transform: translate(-8%, 6%) scale(0.98);
+    opacity: 0.16;
+  }
+}
+
+.animate-spotlight-drift {
+  animation: spotlight-drift 14s ease-in-out infinite alternate;
+}
+
+/* Card Hover Elevation with Depth & Glow */
+.cinematic-hover-card {
+  transition:
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 280ms ease,
+    box-shadow 320ms ease;
+}
+
+.cinematic-hover-card:hover {
+  transform: translateY(-4px) scale(1.012);
+  border-color: rgba(32, 227, 162, 0.35);
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.6),
+    0 0 24px rgba(32, 227, 162, 0.14);
+}
+
+/* Infinite Horizontal Moving Marquee for Video Showcase Cards */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-50% - 0.5rem));
+  }
+}
+
+.animate-marquee-smooth {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 36s linear infinite;
+  will-change: transform;
+}
+
+.animate-marquee-smooth:hover {
+  animation-play-state: paused;
+}
+
+/* Floating Social Platform Icons */
+@keyframes social-bob {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.animate-social-bob-1 { animation: social-bob 3.2s ease-in-out infinite; }
+.animate-social-bob-2 { animation: social-bob 2.8s ease-in-out infinite 0.4s; }
+.animate-social-bob-3 { animation: social-bob 3.5s ease-in-out infinite 0.8s; }
+.animate-social-bob-4 { animation: social-bob 3.0s ease-in-out infinite 1.2s; }
+.animate-social-bob-5 { animation: social-bob 3.4s ease-in-out infinite 1.6s; }
+.animate-social-bob-6 { animation: social-bob 2.9s ease-in-out infinite 2.0s; }
+
+/* --- Strict Prefers-Reduced-Motion Override --- */
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-reveal-init,
+  .cinematic-panel-enter {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .animate-float-1,
+  .animate-float-2,
+  .animate-float-3,
+  .shimmer-gradient-text,
+  .animate-glow-trail,
+  .animate-spotlight-drift {
+    animation: none !important;
+  }
+
+  .cinematic-hover-card:hover {
+    transform: none !important;
+  }
+}

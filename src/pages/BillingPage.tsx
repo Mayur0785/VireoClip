@@ -27,8 +27,11 @@ import {
   BillingInterval,
 } from '../services/billingService';
 import { getPlanPriceDisplay, isProviderIntervalSupported } from '../utils/pricingUtils';
+import { useCurrency } from '../context/CurrencyContext';
+import { CurrencyToggle } from '../components/CurrencyToggle';
 
 export const BillingPage: React.FC = () => {
+  const { currency } = useCurrency();
   const [searchParams] = useSearchParams();
   const [plans, setPlans] = useState<PlanDefinition[]>([]);
   const [providers, setProviders] = useState<ProviderOption[]>([]);
@@ -420,8 +423,8 @@ export const BillingPage: React.FC = () => {
         </SpotlightCard>
       </div>
 
-      {/* Plan Controls: Billing Interval & Provider Selector */}
-      <div className="p-4 rounded-3xl bg-card border border-border/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* Plan Controls: Billing Interval, Currency Toggle & Provider Selector */}
+      <div className="p-4 rounded-3xl bg-card border border-border/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
         {/* Interval Toggle */}
         <div className="flex items-center gap-2 bg-cream/60 p-1 rounded-2xl border border-border/50">
           <button
@@ -436,6 +439,13 @@ export const BillingPage: React.FC = () => {
           </button>
           <button
             onClick={() => {
+              if (currency === 'INR') {
+                setNotice({
+                  type: 'info',
+                  message: 'Annual billing is unconfigured for INR. Please switch to USD (Paddle) to pay annually.',
+                });
+                return;
+              }
               if (!isProviderIntervalSupported(selectedProvider, 'year', plans)) {
                 setNotice({
                   type: 'info',
@@ -445,14 +455,14 @@ export const BillingPage: React.FC = () => {
               }
               setBillingInterval('year');
             }}
-            disabled={!isProviderIntervalSupported(selectedProvider, 'year', plans)}
+            disabled={currency === 'INR' || !isProviderIntervalSupported(selectedProvider, 'year', plans)}
             title={
-              !isProviderIntervalSupported(selectedProvider, 'year', plans)
-                ? 'Annual billing unavailable for INR (Razorpay)'
+              currency === 'INR' || !isProviderIntervalSupported(selectedProvider, 'year', plans)
+                ? 'Annual billing unavailable for INR'
                 : 'Yearly Billing (Save ~17%)'
             }
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              !isProviderIntervalSupported(selectedProvider, 'year', plans)
+              currency === 'INR' || !isProviderIntervalSupported(selectedProvider, 'year', plans)
                 ? 'opacity-50 cursor-not-allowed text-muted-foreground'
                 : billingInterval === 'year'
                 ? 'bg-card text-foreground shadow-sm'
@@ -460,7 +470,7 @@ export const BillingPage: React.FC = () => {
             }`}
           >
             <span>Yearly Billing</span>
-            {!isProviderIntervalSupported(selectedProvider, 'year', plans) ? (
+            {currency === 'INR' || !isProviderIntervalSupported(selectedProvider, 'year', plans) ? (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-800">
                 Unavailable for INR
               </span>
@@ -472,35 +482,43 @@ export const BillingPage: React.FC = () => {
           </button>
         </div>
 
-        {/* Provider Selector */}
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-muted-foreground flex items-center gap-1">
-            <CreditCard className="size-3.5" />
-            <span>Payment Provider:</span>
-          </span>
-          <div className="flex items-center gap-1.5 bg-cream/60 p-1 rounded-2xl border border-border/50">
-            {providers.map((prov) => (
-              <button
-                key={prov.name}
-                onClick={() => {
-                  setSelectedProvider(prov.name);
-                  if (!isProviderIntervalSupported(prov.name, billingInterval, plans)) {
-                    setBillingInterval('month');
-                    setNotice({
-                      type: 'info',
-                      message: 'Switched to Monthly billing — annual billing is currently unavailable for INR.',
-                    });
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-xl font-medium transition-all ${
-                  selectedProvider === prov.name
-                    ? 'bg-card text-foreground font-semibold shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {prov.name === 'paddle' ? 'Paddle (Global)' : prov.name === 'razorpay' ? 'Razorpay (India)' : 'Stripe'}
-              </button>
-            ))}
+        {/* Currency Display Preference & Provider Selector */}
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground font-medium">Currency:</span>
+            <CurrencyToggle size="sm" />
+          </div>
+
+          {/* Provider Selector */}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground flex items-center gap-1">
+              <CreditCard className="size-3.5" />
+              <span>Provider:</span>
+            </span>
+            <div className="flex items-center gap-1.5 bg-cream/60 p-1 rounded-2xl border border-border/50">
+              {providers.map((prov) => (
+                <button
+                  key={prov.name}
+                  onClick={() => {
+                    setSelectedProvider(prov.name);
+                    if (!isProviderIntervalSupported(prov.name, billingInterval, plans)) {
+                      setBillingInterval('month');
+                      setNotice({
+                        type: 'info',
+                        message: 'Switched to Monthly billing — annual billing is currently unavailable for INR.',
+                      });
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-xl font-medium transition-all ${
+                    selectedProvider === prov.name
+                      ? 'bg-card text-foreground font-semibold shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {prov.name === 'paddle' ? 'Paddle (Global)' : prov.name === 'razorpay' ? 'Razorpay (India)' : 'Stripe'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -521,7 +539,7 @@ export const BillingPage: React.FC = () => {
             const isStudio = p.id === 'studio';
             const isFree = p.id === 'free';
 
-            const priceDisplay = getPlanPriceDisplay(p, billingInterval, selectedProvider);
+            const priceDisplay = getPlanPriceDisplay(p, billingInterval, selectedProvider, currency);
 
             return (
               <SpotlightCard

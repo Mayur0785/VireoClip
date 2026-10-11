@@ -15,18 +15,57 @@ import instagramLogo from "../../assets/landing/platforms/instagram.svg";
 import { channels, platformOutputs } from "../../data/platforms";
 
 function VideoTile({ compact = false }: { compact?: boolean }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isPlaying) {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+    } else {
+      videoRef.current
+        ?.play()
+        .then(() => setIsPlaying(true))
+        .catch(() => setIsPlaying(true));
+    }
+  };
+
   return (
-    <div className={`lv-video ${compact ? "lv-video-compact" : ""}`}>
-      <img
-        src={creatorVideo}
-        alt="Creator speaking to camera in a warm home studio"
-        loading={compact ? "lazy" : "eager"}
-        decoding="async"
-      />
+    <div
+      className={`lv-video ${compact ? "lv-video-compact" : ""} cursor-pointer group`}
+      onClick={togglePlay}
+    >
+      {isPlaying ? (
+        <video
+          ref={videoRef}
+          src="/demo/creator-studio-demo.mp4"
+          className="absolute inset-0 w-full h-full object-cover"
+          autoPlay
+          loop
+          playsInline
+        />
+      ) : (
+        <img
+          src={creatorVideo}
+          alt="Creator speaking to camera in a warm home studio"
+          loading={compact ? "lazy" : "eager"}
+          decoding="async"
+        />
+      )}
       <div className="lv-video-content">
-        <span className="lv-video-play">
-          <Play size={18} fill="currentColor" />
-        </span>
+        <button
+          type="button"
+          onClick={togglePlay}
+          className="lv-video-play"
+          aria-label={isPlaying ? "Pause video preview" : "Play video preview"}
+        >
+          {isPlaying ? (
+            <span className="size-3.5 bg-current rounded-xs" />
+          ) : (
+            <Play size={18} fill="currentColor" />
+          )}
+        </button>
         <span className="lv-video-label">YOUR VIDEO</span>
       </div>
     </div>
@@ -80,7 +119,7 @@ export function TransformationVisual() {
         <span className="lv-engine-icon">
           <Logo compact />
         </span>
-        <strong>Vireo</strong>
+        <strong>VireoClip</strong>
         <small>Transcribe · Understand · Repurpose</small>
       </div>
       <div className="lv-transform-connector lv-transform-connector--out">
@@ -330,3 +369,132 @@ export function MomentsPreview() {
     </div>
   );
 }
+
+export function TimelineEditorPreview() {
+  return (
+    <div
+      className="lv-product-window lv-reveal"
+      aria-label="Illustrative multi-track timeline video editor"
+    >
+      <div className="lv-window-bar">
+        <span className="lv-window-dots">
+          <i />
+          <i />
+          <i />
+        </span>
+        <span>VireoClip Studio · Multi-Track Timeline</span>
+        <span className="lv-window-right">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#20E3A2] animate-pulse inline-block" />
+          <span>9:16 Vertical</span>
+        </span>
+      </div>
+
+      <div className="p-4 sm:p-5 space-y-4 bg-[#0A101D] text-xs">
+        {/* Playhead and Control Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+          <div className="flex items-center gap-3">
+            <span className="font-mono font-bold text-[#20E3A2] text-sm bg-black/40 px-2.5 py-1 rounded border border-white/10">
+              00:14.80
+            </span>
+            <span className="text-zinc-400 text-[11px] hidden sm:inline">
+              Clip duration: 00:32.00
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/15 text-purple-300 border border-purple-500/30">
+              Keyframes Active
+            </span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#20E3A2]/15 text-[#20E3A2] border border-[#20E3A2]/30">
+              Smart Captions
+            </span>
+          </div>
+        </div>
+
+        {/* Multi-Track Visual Stack */}
+        <div className="space-y-2">
+          {/* Track 1: Captions */}
+          <div className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-[10px] font-semibold text-zinc-400 font-mono flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-cyan-400" />
+              CAPTIONS
+            </span>
+            <div className="flex-1 h-7 bg-white/[0.03] rounded-md border border-white/[0.06] p-0.5 flex gap-1 relative overflow-hidden">
+              <div className="h-full w-28 bg-cyan-500/25 border border-cyan-400/40 rounded px-2 flex items-center text-[10px] text-cyan-200 font-medium">
+                "Stop wasting hours..."
+              </div>
+              <div className="h-full w-36 bg-cyan-500/25 border border-cyan-400/40 rounded px-2 flex items-center text-[10px] text-cyan-200 font-medium">
+                "Repurpose with AI..."
+              </div>
+              <div className="h-full flex-1 bg-cyan-500/15 border border-cyan-400/20 rounded px-2 flex items-center text-[10px] text-cyan-300/70">
+                "Automated hook..."
+              </div>
+            </div>
+          </div>
+
+          {/* Track 2: B-Roll Overlays */}
+          <div className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-[10px] font-semibold text-zinc-400 font-mono flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-purple-400" />
+              B-ROLL
+            </span>
+            <div className="flex-1 h-7 bg-white/[0.03] rounded-md border border-white/[0.06] p-0.5 flex gap-1 relative overflow-hidden">
+              <div className="w-12 h-full" />
+              <div className="h-full w-32 bg-purple-500/25 border border-purple-400/40 rounded px-2 flex items-center text-[10px] text-purple-200 font-medium">
+                Tech Workspace B-Roll
+              </div>
+              <div className="w-8 h-full" />
+              <div className="h-full w-28 bg-purple-500/25 border border-purple-400/40 rounded px-2 flex items-center text-[10px] text-purple-200 font-medium">
+                Abstract Network
+              </div>
+            </div>
+          </div>
+
+          {/* Track 3: Video & Reframe */}
+          <div className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-[10px] font-semibold text-zinc-400 font-mono flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-[#20E3A2]" />
+              VIDEO
+            </span>
+            <div className="flex-1 h-8 bg-white/[0.03] rounded-md border border-white/[0.06] p-0.5 flex gap-1 relative overflow-hidden">
+              <div className="h-full w-full bg-emerald-500/20 border border-emerald-400/40 rounded px-2.5 flex items-center justify-between text-[11px] text-emerald-200 font-medium">
+                <span>Source Video (9:16 Face Tracked)</span>
+                <span className="text-[10px] font-mono text-emerald-400/80">1080×1920 · 60fps</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Track 4: Audio Waveform */}
+          <div className="flex items-center gap-2">
+            <span className="w-16 shrink-0 text-[10px] font-semibold text-zinc-400 font-mono flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-amber-400" />
+              AUDIO
+            </span>
+            <div className="flex-1 h-6 bg-white/[0.03] rounded-md border border-white/[0.06] p-0.5 flex items-center px-2 relative overflow-hidden">
+              <div className="w-full flex items-center justify-between gap-0.5 h-full opacity-60">
+                {Array.from({ length: 42 }).map((_, idx) => {
+                  const h = 20 + ((idx * 17) % 80);
+                  return (
+                    <span
+                      key={idx}
+                      className="w-1 bg-amber-400/80 rounded-full"
+                      style={{ height: `${h}%` }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Feature Badges */}
+        <div className="pt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-zinc-400 border-t border-white/[0.06]">
+          <span>Non-destructive timeline</span>
+          <span>Keyframe transition curves</span>
+          <span>Dynamic subtitle presets</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+

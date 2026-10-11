@@ -341,7 +341,7 @@ export const NewProjectPage: React.FC = () => {
                 />
 
                 <p className="mt-5 text-xs text-muted-foreground">
-                  Supports MP4, MOV, AVI, WEBM &bull; Max file size: 50 MB
+                  Supports MP4, MOV, AVI, WEBM &bull; Max file size: 2 GB
                 </p>
               </div>
 
@@ -367,7 +367,7 @@ export const NewProjectPage: React.FC = () => {
                       <Check className="size-2.5" />
                     </span>
                     <div>
-                      <p className="text-xs font-semibold text-foreground">Max 50 MB</p>
+                      <p className="text-xs font-semibold text-foreground">Max 2 GB</p>
                       <p className="text-[11px] text-muted-foreground">File size limit</p>
                     </div>
                   </div>
@@ -448,7 +448,7 @@ export const NewProjectPage: React.FC = () => {
                   <p className="text-amber-800 bg-amber-50 rounded-md px-2.5 py-1.5 border border-amber-200">
                     &bull; Note: TikTok and Instagram page URLs are not currently supported. Playlists, channels, and private/age-restricted YouTube videos are not supported.
                   </p>
-                  <p>&bull; Max download size: 50 MB &bull; Max duration: 2 hours</p>
+                  <p>&bull; Max download size: 2 GB &bull; Max duration: 2 hours</p>
                 </div>
               </div>
             </div>

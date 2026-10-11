@@ -49,12 +49,17 @@ export const PrivacyPage: React.FC = () => {
           <section>
             <h2 className="text-xl font-bold text-[#183d2d] mb-3">1. Data Controller and Scope</h2>
             <p>
-              This Privacy Policy explains how <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono text-xs">[CONFIRMATION REQUIRED: Legal Company / Registered Entity Name]</span> ("Vireo", "we", "us", or "our") collects, uses, processes, and safeguards personal data through the Vireo web application.
+              This Privacy Policy explains how <strong>VireoClip by Vertex Digitals</strong> ("VireoClip", "we", "us", or "our") collects, uses, processes, and safeguards personal data through the VireoClip web application.
             </p>
             <p className="mt-2">
-              For privacy inquiries or data requests, contact our designated privacy representative at:
+              For privacy inquiries or data requests, contact our designated support and privacy inbox at:
               <br />
-              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono text-xs mt-1 inline-block">[CONFIRMATION REQUIRED: Privacy / Data Protection Contact Email, e.g. privacy@vireo.app]</span>
+              <a
+                href="mailto:vertexdigitals07@gmail.com"
+                className="font-medium text-[#246844] underline hover:text-[#183d2d] font-mono text-xs"
+              >
+                vertexdigitals07@gmail.com
+              </a>
             </p>
           </section>
 
@@ -206,7 +211,12 @@ export const PrivacyPage: React.FC = () => {
             <p className="mt-2">
               For questions regarding this draft policy or our privacy practices:
               <br />
-              <span className="bg-amber-100 text-amber-900 px-1.5 py-0.5 rounded font-mono text-xs mt-1 inline-block">[CONFIRMATION REQUIRED: Designated Support / Privacy Email Address]</span>
+              <a
+                href="mailto:vertexdigitals07@gmail.com"
+                className="font-medium text-[#246844] underline hover:text-[#183d2d] font-mono text-xs"
+              >
+                vertexdigitals07@gmail.com
+              </a>
             </p>
           </section>
         </div>

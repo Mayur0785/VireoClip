@@ -1,0 +1,2044 @@
+/* =========================================================================
+   VireoClip Feature Showcase Carousel CSS
+   Source of Truth: final.html
+   Scoped strictly under .vireo-showcase to prevent global pollution
+   ========================================================================= */
+
+@property --s {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+@property --sec {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.vireo-showcase {
+  --bg: #080B12;
+  --ink: #F4F6FC;
+  --mute: #9B9BA3;
+  --line: rgba(255, 255, 255, 0.12);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --b: 0.45s;
+  --dwell: 8s;
+  --accent: #20E3A2;
+  --vireo-purple: #8B5CF6;
+  --cw: min(900px, 70vw, calc((100vh - 240px) * (2 / 1.08)));
+  --gap: clamp(16px, 2vw, 24px);
+  position: relative;
+  width: 100%;
+  overflow-x: clip;
+  overflow-y: visible;
+  padding: clamp(16px, 2.5vw, 28px) 0 clamp(14px, 2vw, 22px);
+  box-sizing: border-box;
+}
+
+@media (max-width: 1280px) {
+  .vireo-showcase {
+    --cw: min(840px, 75vw, calc((100vh - 220px) * (2 / 1.08)));
+    --gap: 20px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .vireo-showcase {
+    --cw: min(760px, calc(100% - 100px));
+    --gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .vireo-showcase {
+    --cw: min(640px, calc(100% - 50px));
+    --gap: 12px;
+    padding: 14px 0 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .vireo-showcase {
+    --cw: min(100% - 16px, 94vw);
+    --gap: 8px;
+    padding: 10px 0 14px;
+  }
+}
+
+.vireo-showcase *,
+.vireo-showcase *::before,
+.vireo-showcase *::after {
+  box-sizing: border-box;
+}
+
+.vireo-showcase u,
+.vireo-showcase s {
+  text-decoration: none;
+}
+
+/* Ambient dynamic background glow that shifts with active feature */
+.vireo-showcase .glow {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: min(1100px, 80vw);
+  height: min(560px, 44vw);
+  transform: translate3d(-50%, -50%, 0);
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.5;
+  background-color: var(--glow, #7c3aed);
+  transition: background-color 0.9s ease;
+  pointer-events: none;
+  z-index: 0;
+  will-change: background-color;
+  contain: strict;
+}
+
+.vireo-showcase .stage {
+  position: relative;
+  z-index: 1;
+}
+
+.vireo-showcase .viewport {
+  position: relative;
+  overflow: hidden;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.vireo-showcase .track {
+  display: flex;
+  gap: var(--gap);
+  will-change: transform;
+  transition: transform 0.85s var(--ease);
+}
+
+.vireo-showcase .track.no-anim {
+  transition: none !important;
+}
+
+.vireo-showcase .slide {
+  flex: 0 0 auto;
+  width: var(--cw);
+  opacity: 0.38;
+  transform: scale(0.92);
+  cursor: pointer;
+  transition: opacity 0.6s ease, transform 0.85s var(--ease);
+}
+
+.vireo-showcase .slide.active {
+  opacity: 1;
+  transform: none;
+  cursor: default;
+}
+
+/* Responsive Card with Container Query inline-size */
+.vireo-showcase .card {
+  position: relative;
+  container-type: inline-size;
+  aspect-ratio: 2 / 1.08;
+  overflow: hidden;
+  border-radius: clamp(14px, 2vw, 26px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(90% 100% at 12% 0%, var(--c1), transparent 62%),
+    radial-gradient(80% 90% at 100% 100%, var(--c2), transparent 62%),
+    #0c101a;
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.75);
+  transition: box-shadow 0.6s;
+}
+
+.vireo-showcase .slide.active .card {
+  box-shadow: 0 40px 100px -30px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.vireo-showcase .card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: overlay;
+  z-index: 8;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Circular Navigation Arrows */
+.vireo-showcase .nav {
+  position: absolute;
+  top: calc(50% - 22px);
+  z-index: 10;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(10, 10, 16, 0.45);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.vireo-showcase .nav:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: scale(1.06);
+}
+
+.vireo-showcase .nav svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vireo-showcase .nav.prev {
+  left: clamp(12px, calc(50% - var(--cw) / 2 - 58px), 48px);
+}
+.vireo-showcase .nav.next {
+  right: clamp(12px, calc(50% - var(--cw) / 2 - 58px), 48px);
+}
+
+@media (max-width: 768px) {
+  .vireo-showcase .nav {
+    top: auto;
+    bottom: -46px;
+    width: 36px;
+    height: 36px;
+    z-index: 12;
+  }
+  .vireo-showcase .nav.prev {
+    left: calc(50% - 90px);
+  }
+  .vireo-showcase .nav.next {
+    right: calc(50% - 90px);
+  }
+  .vireo-showcase .tabs {
+    margin-top: 52px;
+  }
+}
+
+/* Feature Navigation Tabs Row with Animated Progress */
+.vireo-showcase .tabs {
+  display: flex;
+  justify-content: safe center;
+  gap: 4px;
+  margin-top: clamp(14px, 1.8vw, 20px);
+  padding: 0 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.vireo-showcase .tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.vireo-showcase .tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px 13px;
+  border: 0;
+  border-radius: 99px;
+  background: none;
+  color: var(--mute);
+  font: 500 13.5px / 1 Inter, system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.25s, color 0.25s;
+}
+
+.vireo-showcase .tab:hover {
+  color: #fff;
+}
+
+.vireo-showcase .tab[aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.vireo-showcase .tab svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vireo-showcase .pg {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.vireo-showcase .tab[aria-selected="true"] .pg {
+  opacity: 1;
+}
+
+.vireo-showcase .pg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+.vireo-showcase .tab[aria-selected="true"] .pg::after {
+  animation: prog var(--dwell) linear forwards;
+}
+
+.vireo-showcase.hold .pg::after {
+  animation-play-state: paused !important;
+}
+
+@keyframes prog {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.vireo-showcase .nav:focus-visible,
+.vireo-showcase .tab:focus-visible {
+  outline: 2px solid #8b5cf6;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .vireo-showcase .nav {
+    width: 32px;
+    height: 32px;
+    top: calc(50% - 16px);
+  }
+  .vireo-showcase .nav svg {
+    width: 14px;
+    height: 14px;
+  }
+  .vireo-showcase .tab {
+    padding: 10px 12px 12px;
+    font-size: 12.5px;
+  }
+}
+
+/* =========================================================================
+   Shared Demo Pieces
+   ========================================================================= */
+.vireo-showcase .demo {
+  position: absolute;
+  inset: 0;
+  font-size: 1.7cqw;
+}
+
+.vireo-showcase .demo h4 {
+  font-size: 1.5cqw;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 1.4cqw;
+}
+
+.vireo-showcase .p {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 56%;
+  height: 80%;
+  transform: translateX(-50%);
+  display: block;
+}
+
+.vireo-showcase .p::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 42%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  background: #e3b08f;
+}
+
+.vireo-showcase .p::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56%;
+  border-radius: 50% 50% 0 0 / 70% 70% 0 0;
+  background: #34425c;
+}
+
+.vireo-showcase .tl {
+  position: absolute;
+  overflow: hidden;
+  background: #1b1d24;
+}
+
+.vireo-showcase .vf {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.vireo-showcase .hasvid > .p {
+  display: none;
+}
+
+.vireo-showcase .cur {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 3cqw;
+  height: 3cqw;
+  z-index: 7;
+  pointer-events: none;
+  filter: drop-shadow(0 0.3cqw 0.5cqw rgba(0, 0, 0, 0.55));
+}
+
+.vireo-showcase .rip {
+  position: absolute;
+  width: 3.4cqw;
+  height: 3.4cqw;
+  margin: -1.7cqw 0 0 -1.7cqw;
+  border-radius: 50%;
+  border: 0.25cqw solid rgba(255, 255, 255, 0.9);
+  opacity: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.vireo-showcase .slide.active .rip {
+  animation: ripple 0.65s ease-out calc(var(--b) + var(--d)) both;
+}
+
+@keyframes ripple {
+  0% {
+    opacity: 0.95;
+    transform: scale(0.25);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+}
+
+.vireo-showcase .pill {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 0.55cqw 1.7cqw;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(6px);
+  font-size: 1.35cqw;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+@keyframes swapOut {
+  from {
+    opacity: 1;
+  }
+}
+@keyframes swapIn {
+  from {
+    opacity: 0;
+  }
+}
+
+/* =========================================================================
+   1 · AI Clipping Demo & Real URL Field
+   ========================================================================= */
+.vireo-showcase .d-clip .bar {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 13cqw;
+  width: min(52cqw, 92%);
+  height: 6.8cqw;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1cqw;
+  padding: 0.6cqw 0.7cqw 0.6cqw 1.8cqw;
+  background: rgba(13, 17, 28, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(16px);
+  color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  overflow: hidden;
+  z-index: 10;
+}
+
+.vireo-showcase .d-clip .bar .fill {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(139, 92, 246, 0.3));
+  transform-origin: left;
+  transform: scaleX(0);
+  opacity: 0;
+}
+
+.vireo-showcase .d-clip .bar > * {
+  position: relative;
+}
+
+.vireo-showcase .d-clip .bar:focus-within {
+  border-color: rgba(139, 92, 246, 0.8);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25), 0 16px 40px -10px rgba(0, 0, 0, 0.85);
+}
+
+.vireo-showcase .d-clip .bar .bar-field {
+  display: flex;
+  align-items: center;
+  gap: 0.8cqw;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.vireo-showcase .d-clip .bar .bar-icon {
+  width: 1.8cqw;
+  height: 1.8cqw;
+  stroke: rgba(255, 255, 255, 0.65);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: none;
+}
+
+.vireo-showcase .d-clip .bar .bar-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 1.35cqw;
+  font-family: inherit;
+  padding: 0;
+}
+
+.vireo-showcase .d-clip .bar .bar-input::placeholder {
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6cqw;
+  white-space: nowrap;
+  border-radius: 9999px;
+  height: 5.4cqw;
+  padding: 0 1.8cqw;
+  background: linear-gradient(135deg, #8B5CF6 0%, #6D28D9 100%);
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 1.25cqw;
+  line-height: 1;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(109, 40, 217, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn:hover:not(:disabled) {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.55);
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn:active:not(:disabled) {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
+.vireo-showcase .d-clip .src {
+  position: absolute;
+  left: 39cqw;
+  top: 0.6cqw;
+  width: 22cqw;
+  height: 11.1cqw;
+  border-radius: 0.9cqw;
+  overflow: hidden;
+  opacity: 0;
+  background: #222;
+  box-shadow: 0 1.2cqw 3cqw -1cqw rgba(0, 0, 0, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.vireo-showcase .d-clip .src em {
+  position: absolute;
+  right: 0.7cqw;
+  bottom: 1cqw;
+  z-index: 2;
+  font-style: normal;
+  font-size: 1.1cqw;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 0.25cqw 0.7cqw;
+  border-radius: 0.4cqw;
+  color: #fff;
+}
+
+.vireo-showcase .d-clip .src::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0.55cqw;
+  z-index: 2;
+  background: linear-gradient(90deg, #ff4d6d 0 38%, rgba(255, 255, 255, 0.3) 38%);
+}
+
+.vireo-showcase .d-clip .clip {
+  position: absolute;
+  top: 29cqw;
+  left: calc(13cqw + var(--n) * 12.6cqw);
+  width: 11cqw;
+  cursor: pointer;
+  transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.vireo-showcase .d-clip .clip:hover {
+  transform: translateY(-0.6cqw) scale(1.04);
+  z-index: 5;
+}
+
+.vireo-showcase .d-clip .ic {
+  position: absolute;
+  left: 50%;
+  top: -3.6cqw;
+  transform: translateX(-50%);
+  width: 2.6cqw;
+  height: 2.6cqw;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  display: grid;
+  place-items: center;
+  font-size: 1cqw;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.vireo-showcase .d-clip .th {
+  position: relative;
+  height: 16cqw;
+  border-radius: 0.9cqw;
+  overflow: hidden;
+  background: #1b1d24;
+  box-shadow: 0 1cqw 3cqw -1cqw rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.vireo-showcase .d-clip .clip.top .th {
+  outline: 0.2cqw solid rgba(255, 255, 255, 0.9);
+  outline-offset: 0.25cqw;
+}
+
+.vireo-showcase .d-clip .th em {
+  position: absolute;
+  left: 0.7cqw;
+  bottom: 0.7cqw;
+  z-index: 2;
+  font-style: normal;
+  font-weight: 700;
+  font-size: 1.2cqw;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 0.3cqw 0.8cqw;
+  border-radius: 0.5cqw;
+  color: #20E3A2;
+  border: 1px solid rgba(32, 227, 162, 0.3);
+  backdrop-filter: blur(4px);
+  --s: var(--score);
+  counter-reset: sc var(--s);
+}
+
+.vireo-showcase .d-clip .th em::after {
+  content: counter(sc);
+}
+
+.vireo-showcase .d-clip .cur {
+  transform: translate(84cqw, 42cqw);
+  opacity: 0;
+}
+
+.vireo-showcase .d-clip.user-interacted .cur {
+  display: none !important;
+}
+
+.vireo-showcase .slide.active .d-clip .src {
+  animation: srcDrop 1.5s ease var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-clip .bar .fill {
+  animation: fillbar 1s ease calc(var(--b) + 1.45s) both;
+}
+
+.vireo-showcase .slide.active .d-clip:not(.user-interacted) .bar b .g1,
+.vireo-showcase .slide.active .d-clip:not(.user-interacted) .bar .get-clips-btn .g1 {
+  animation: g1 3.4s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-clip:not(.user-interacted) .bar b .g2,
+.vireo-showcase .slide.active .d-clip:not(.user-interacted) .bar .get-clips-btn .g2 {
+  animation: g2 3.4s linear var(--b) both;
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn .btn-label-stack {
+  display: grid;
+  place-items: center;
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn .btn-label-stack span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+.vireo-showcase .d-clip .bar .get-clips-btn .btn-label-stack .g2 {
+  opacity: 0;
+}
+
+.vireo-showcase .slide.active .d-clip .clip {
+  animation: clipOut 0.95s var(--spring) calc(var(--b) + 2.35s + var(--n) * 0.09s) backwards;
+}
+
+.vireo-showcase .slide.active .d-clip .th em {
+  animation: count 1.2s ease-out calc(var(--b) + 2.6s + var(--n) * 0.09s) backwards;
+}
+
+.vireo-showcase .slide.active .d-clip:not(.user-interacted) .cur {
+  animation: cur1 5.3s cubic-bezier(0.25, 0.1, 0.25, 1) var(--b) both;
+}
+
+.vireo-showcase .d-clip.cycle-out .clip {
+  opacity: 0;
+  transform: translateY(1.5cqw) scale(0.92);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+@keyframes srcDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-6cqw);
+  }
+  22% {
+    opacity: 1;
+    transform: none;
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(7cqw) scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(10cqw) scale(0.3);
+  }
+}
+
+@keyframes fillbar {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+  88% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes g1 {
+  0%, 41% {
+    opacity: 1;
+  }
+  43%, 70% {
+    opacity: 0;
+  }
+  73%, 100% {
+    opacity: 1;
+  }
+}
+
+@keyframes g2 {
+  0%, 41% {
+    opacity: 0;
+  }
+  43%, 70% {
+    opacity: 1;
+  }
+  73%, 100% {
+    opacity: 0;
+  }
+}
+
+@keyframes clipOut {
+  from {
+    opacity: 0;
+    transform: translate(calc((2.5 - var(--n)) * 10cqw), -16cqw) scale(0.4) rotate(calc((var(--n) - 2.5) * 4deg));
+  }
+}
+
+@keyframes count {
+  from {
+    --s: 0;
+  }
+}
+
+@keyframes cur1 {
+  0% {
+    transform: translate(84cqw, 42cqw);
+    opacity: 0;
+  }
+  5% {
+    transform: translate(84cqw, 42cqw);
+    opacity: 1;
+  }
+  16% {
+    transform: translate(50.5cqw, 6.2cqw);
+  }
+  21% {
+    transform: translate(53cqw, 7cqw);
+  }
+  27% {
+    transform: translate(68.2cqw, 16.4cqw);
+  }
+  29% {
+    transform: translate(68.2cqw, 16.4cqw) scale(0.8);
+  }
+  32% {
+    transform: translate(68.2cqw, 16.4cqw) scale(1);
+  }
+  38% {
+    transform: translate(68.2cqw, 17.5cqw);
+  }
+  55% {
+    transform: translate(38cqw, 32cqw);
+  }
+  68% {
+    transform: translate(20cqw, 33cqw);
+  }
+  82% {
+    transform: translate(22cqw, 33cqw);
+  }
+  95% {
+    transform: translate(84cqw, 42cqw);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(84cqw, 42cqw);
+    opacity: 0;
+  }
+}
+
+/* =========================================================================
+   2 · AI Captions Demo
+   ========================================================================= */
+.vireo-showcase .d-cap .vid {
+  position: absolute;
+  left: 7cqw;
+  top: 12cqw;
+  width: 52cqw;
+  height: 29.25cqw;
+  border-radius: 1.2cqw;
+  overflow: hidden;
+  background: #222;
+  box-shadow: 0 2cqw 5cqw -2cqw rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.vireo-showcase .d-cap .cap {
+  position: absolute;
+  left: 1.5cqw;
+  right: 1.5cqw;
+  bottom: 11%;
+  max-width: 49cqw;
+  margin: 0 auto;
+  text-align: center;
+  font-weight: 900;
+  line-height: 1.1;
+  opacity: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.vireo-showcase .d-cap .ca {
+  font-size: 3.4cqw;
+  color: #ff39c8;
+  letter-spacing: 0.02em;
+  -webkit-text-stroke: 0.28cqw #14051c;
+  paint-order: stroke fill;
+  text-shadow: 0 0.3cqw 0 #14051c;
+}
+
+.vireo-showcase .d-cap .cb {
+  font-size: 2.6cqw;
+  color: #fff;
+  text-shadow: 0 0.3cqw 0.3cqw rgba(0, 0, 0, 0.65);
+}
+
+.vireo-showcase .d-cap .cb u {
+  color: #7dff3b;
+}
+
+.vireo-showcase .d-cap .cc {
+  font-size: 2.3cqw;
+  font-weight: 700;
+  opacity: 1;
+}
+
+.vireo-showcase .d-cap .cc span {
+  display: inline-block;
+  background: rgba(18, 18, 18, 0.76);
+  padding: 0.55cqw 1.4cqw;
+  border-radius: 0.6cqw;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.vireo-showcase .d-cap .cc strong {
+  color: #fff;
+  font-weight: 800;
+}
+
+.vireo-showcase .d-cap .panel {
+  position: absolute;
+  left: 64.5cqw;
+  top: 4.5cqw;
+  width: 28cqw;
+  height: 45cqw;
+  border-radius: 1.3cqw;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.vireo-showcase .d-cap .tabs2 {
+  position: absolute;
+  left: 1.6cqw;
+  top: 1.4cqw;
+  display: flex;
+  gap: 2cqw;
+  font-size: 1.25cqw;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+
+.vireo-showcase .d-cap .tabs2 .on {
+  color: #fff;
+}
+
+.vireo-showcase .d-cap .pr {
+  position: absolute;
+  left: 1.5cqw;
+  right: 1.5cqw;
+  top: calc(5.6cqw + var(--k) * 7.8cqw);
+  height: 7cqw;
+  border-radius: 0.8cqw;
+  background: rgba(255, 255, 255, 0.06);
+  outline: 0.2cqw solid transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35cqw;
+  cursor: pointer;
+  transition: background 0.2s, outline-color 0.2s;
+}
+
+.vireo-showcase .d-cap .pr .sm {
+  font-weight: 900;
+  font-size: 1.9cqw;
+  line-height: 1;
+}
+
+.vireo-showcase .d-cap .pr small {
+  font-size: 1cqw;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.vireo-showcase .d-cap .pr.on {
+  outline-color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.vireo-showcase .d-cap .cur {
+  transform: translate(78.5cqw, 37cqw);
+}
+
+.vireo-showcase .slide.active .d-cap .ca {
+  animation: capA 7s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-cap .cb {
+  animation: capB 7s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-cap .cc {
+  animation: capC 7s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-cap .pr:nth-child(3) {
+  animation: sel1 7s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-cap .pr:nth-child(4) {
+  animation: sel2 7s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-cap .pr:nth-child(5) {
+  animation: sel3 7s linear var(--b) both;
+}
+
+.vireo-showcase .slide.active .d-cap .cur {
+  animation: cur2 7s ease var(--b) both;
+}
+
+@keyframes capA {
+  0%, 14% { opacity: 0; transform: scale(0.7); }
+  15.5% { opacity: 1; transform: scale(1.1); }
+  17%, 39% { opacity: 1; transform: none; }
+  40%, 100% { opacity: 0; transform: scale(0.9); }
+}
+
+@keyframes capB {
+  0%, 39% { opacity: 0; transform: scale(0.7); }
+  40.5% { opacity: 1; transform: scale(1.1); }
+  42%, 65% { opacity: 1; transform: none; }
+  66%, 100% { opacity: 0; transform: scale(0.9); }
+}
+
+@keyframes capC {
+  0%, 65% { opacity: 0; transform: scale(0.7); }
+  66.5% { opacity: 1; transform: scale(1.08); }
+  68%, 100% { opacity: 1; transform: none; }
+}
+
+@keyframes sel1 {
+  0%, 14% { outline-color: transparent; background: rgba(255, 255, 255, 0.06); }
+  15%, 39% { outline-color: #fff; background: rgba(255, 255, 255, 0.14); }
+  40%, 100% { outline-color: transparent; background: rgba(255, 255, 255, 0.06); }
+}
+
+@keyframes sel2 {
+  0%, 39% { outline-color: transparent; background: rgba(255, 255, 255, 0.06); }
+  40%, 65% { outline-color: #fff; background: rgba(255, 255, 255, 0.14); }
+  66%, 100% { outline-color: transparent; background: rgba(255, 255, 255, 0.06); }
+}
+
+@keyframes sel3 {
+  0%, 65% { outline-color: transparent; background: rgba(255, 255, 255, 0.06); }
+  66%, 100% { outline-color: #fff; background: rgba(255, 255, 255, 0.14); }
+}
+
+@keyframes cur2 {
+  0% { transform: translate(82cqw, 46cqw); }
+  12% { transform: translate(78.5cqw, 21.4cqw); }
+  14% { transform: translate(78.5cqw, 21.4cqw) scale(0.82); }
+  16%, 34% { transform: translate(78.5cqw, 21.4cqw); }
+  38% { transform: translate(78.5cqw, 29.2cqw); }
+  40% { transform: translate(78.5cqw, 29.2cqw) scale(0.82); }
+  42%, 60% { transform: translate(78.5cqw, 29.2cqw); }
+  64% { transform: translate(78.5cqw, 37cqw); }
+  66% { transform: translate(78.5cqw, 37cqw) scale(0.82); }
+  68%, 100% { transform: translate(78.5cqw, 37cqw); }
+}
+
+/* =========================================================================
+   3 · AI Reframe Demo
+   ========================================================================= */
+.vireo-showcase .d-rf {
+  --x1: 6%; --y1: 6%; --w1: 38%; --h1: 56%;
+  --x2: 54%; --y2: 6%; --w2: 38%; --h2: 56%; --o2: 1;
+}
+
+.vireo-showcase .d-rf[data-l="1"] {
+  --x1: 8%; --y1: 6%; --w1: 38%; --h1: 56%;
+  --x2: 50%; --y2: 8%; --w2: 38%; --h2: 56%;
+}
+
+.vireo-showcase .d-rf[data-l="2"] {
+  --x1: 20%; --y1: 10%; --w1: 24%; --h1: 52%;
+  --x2: 33%; --y2: 0%; --w2: 48%; --h2: 46%;
+}
+
+.vireo-showcase .d-rf[data-l="3"] {
+  --x1: 34.2%; --y1: 0%; --w1: 31.6%; --h1: 100%; --o2: 0;
+}
+
+.vireo-showcase .d-rf[data-l="4"] {
+  --x1: 34%; --y1: 4%; --w1: 32%; --h1: 66%; --o2: 0;
+}
+
+.vireo-showcase .d-rf .lf {
+  position: absolute;
+  left: 9cqw;
+  top: 12cqw;
+  width: 38cqw;
+  aspect-ratio: 16 / 9;
+  border-radius: 0.9cqw;
+  overflow: hidden;
+  background: #111;
+  box-shadow: 0 2cqw 5cqw -2cqw rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vireo-showcase .d-rf .rfw {
+  position: absolute;
+  left: 66cqw;
+  top: 8.9cqw;
+  width: 17cqw;
+  aspect-ratio: 9 / 16;
+}
+
+.vireo-showcase .d-rf .bk {
+  position: absolute;
+  inset: 0;
+  border-radius: 1cqw;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.vireo-showcase .d-rf .bk1 {
+  transform: translate(2.3cqw, -1.8cqw);
+  opacity: 0.45;
+}
+
+.vireo-showcase .d-rf .bk2 {
+  transform: translate(1.2cqw, -0.9cqw);
+  opacity: 0.8;
+}
+
+.vireo-showcase .d-rf .rf {
+  position: absolute;
+  inset: 0;
+  border-radius: 1cqw;
+  overflow: hidden;
+  background: #0c0c0e;
+  box-shadow: 0 2cqw 5cqw -2cqw rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.vireo-showcase .d-rf .rf.pulse {
+  animation: rfPulse 0.5s var(--spring);
+}
+
+@keyframes rfPulse {
+  from {
+    transform: scale(0.965);
+  }
+}
+
+.vireo-showcase .d-rf .scene {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+
+.vireo-showcase .d-rf[data-l="0"] .s0,
+.vireo-showcase .d-rf[data-l="1"] .s1,
+.vireo-showcase .d-rf[data-l="2"] .s2,
+.vireo-showcase .d-rf[data-l="3"] .s3,
+.vireo-showcase .d-rf[data-l="4"] .s4 {
+  opacity: 1;
+}
+
+.vireo-showcase .d-rf .tl.blur {
+  filter: blur(1.1cqw) brightness(0.55);
+  transform: scale(1.2) translateZ(0);
+  will-change: transform;
+}
+
+.vireo-showcase .d-rf .cb {
+  position: absolute;
+  z-index: 3;
+  border: 0.22cqw solid #fff;
+  border-radius: 0.5cqw;
+  background: rgba(255, 255, 255, 0.08);
+  transition: left 0.7s var(--ease), top 0.7s var(--ease), width 0.7s var(--ease), height 0.7s var(--ease), opacity 0.4s;
+  left: var(--x1);
+  top: var(--y1);
+  width: var(--w1);
+  height: var(--h1);
+}
+
+.vireo-showcase .d-rf .cb2 {
+  left: var(--x2);
+  top: var(--y2);
+  width: var(--w2);
+  height: var(--h2);
+  opacity: var(--o2);
+  border-color: #ffd23f;
+}
+
+.vireo-showcase .d-rf .cb::before,
+.vireo-showcase .d-rf .cb::after {
+  content: "";
+  position: absolute;
+  width: 0.8cqw;
+  height: 0.8cqw;
+  background: #fff;
+  border-radius: 0.15cqw;
+}
+
+.vireo-showcase .d-rf .cb::before {
+  left: -0.5cqw;
+  top: -0.5cqw;
+}
+
+.vireo-showcase .d-rf .cb::after {
+  right: -0.5cqw;
+  bottom: -0.5cqw;
+}
+
+.vireo-showcase .d-rf .cb2::before,
+.vireo-showcase .d-rf .cb2::after {
+  background: #ffd23f;
+}
+
+.vireo-showcase .d-rf .dots {
+  position: absolute;
+  left: 50%;
+  top: 22cqw;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.8cqw;
+}
+
+.vireo-showcase .d-rf .dots i {
+  display: block;
+  width: 0.7cqw;
+  height: 0.7cqw;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.vireo-showcase .d-rf .dots i.on {
+  background: #fff;
+  width: 2cqw;
+  border-radius: 99px;
+}
+
+.vireo-showcase .d-rf .arr {
+  position: absolute;
+  left: 50%;
+  top: 25.5cqw;
+  transform: translateX(-50%);
+  width: 3cqw;
+  height: 3cqw;
+  stroke: rgba(255, 255, 255, 0.55);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* =========================================================================
+   4 · AI B-roll Demo
+   ========================================================================= */
+.vireo-showcase .d-br .vid2 {
+  position: absolute;
+  left: 7cqw;
+  top: 6cqw;
+  width: 48cqw;
+  height: 27cqw;
+  border-radius: 1.2cqw;
+  overflow: hidden;
+  background: #222;
+  box-shadow: 0 2cqw 5cqw -2cqw rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.vireo-showcase .d-br .sc {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.vireo-showcase .d-br .s-a,
+.vireo-showcase .d-br .s-b {
+  opacity: 0;
+}
+
+.vireo-showcase .d-br .tag {
+  position: absolute;
+  left: 1.2cqw;
+  top: 1.2cqw;
+  z-index: 3;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.4cqw 1.1cqw;
+  border-radius: 99px;
+  font-size: 1.3cqw;
+  font-weight: 600;
+  opacity: 0;
+}
+
+.vireo-showcase .d-br .tag::before {
+  content: "";
+  display: inline-block;
+  width: 0.8cqw;
+  height: 0.8cqw;
+  border-radius: 50%;
+  background: #7a8bff;
+  margin-right: 0.6cqw;
+}
+
+.vireo-showcase .d-br .cp {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6%;
+  z-index: 3;
+  text-align: center;
+  font-weight: 800;
+  font-size: 2.1cqw;
+  text-shadow: 0 0.25cqw 0.5cqw rgba(0, 0, 0, 0.8);
+  color: #fff;
+}
+
+.vireo-showcase .d-br .sug {
+  position: absolute;
+  left: 60cqw;
+  top: 6cqw;
+  width: 33cqw;
+  height: 27cqw;
+  border-radius: 1.2cqw;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.8cqw;
+}
+
+.vireo-showcase .d-br .row {
+  position: absolute;
+  left: 1.4cqw;
+  right: 1.4cqw;
+  top: calc(5.2cqw + var(--k) * 6.4cqw);
+  height: 5.6cqw;
+  display: flex;
+  align-items: center;
+  gap: 1.2cqw;
+}
+
+.vireo-showcase .d-br .row .rth {
+  position: relative;
+  display: block;
+  width: 8cqw;
+  height: 4.6cqw;
+  border-radius: 0.6cqw;
+  flex: none;
+  overflow: hidden;
+  background: #222;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.vireo-showcase .d-br .row .tx {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3cqw;
+  font-size: 1.35cqw;
+  font-weight: 600;
+}
+
+.vireo-showcase .d-br .row .tx small {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.1cqw;
+}
+
+.vireo-showcase .d-br .add {
+  position: relative;
+  margin-left: auto;
+  flex: none;
+  width: 6.4cqw;
+  height: 2.8cqw;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 1.15cqw;
+  font-weight: 600;
+  transition: background 0.3s;
+  cursor: pointer;
+}
+
+.vireo-showcase .d-br .add span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+
+.vireo-showcase .d-br .add .a2 {
+  opacity: 0;
+}
+
+.vireo-showcase .d-br .done .add {
+  background: rgba(110, 231, 208, 0.3);
+  color: #20E3A2;
+}
+
+.vireo-showcase .d-br .done .a1 {
+  opacity: 0;
+}
+.vireo-showcase .d-br .done .a2 {
+  opacity: 1;
+}
+
+.vireo-showcase .d-br .tl2 {
+  position: absolute;
+  left: 7cqw;
+  top: 37.5cqw;
+  width: 86cqw;
+  height: 12.5cqw;
+  border-radius: 1cqw;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.vireo-showcase .d-br .t1,
+.vireo-showcase .d-br .t2 {
+  position: absolute;
+  left: 1cqw;
+  right: 1cqw;
+  height: 4.2cqw;
+}
+
+.vireo-showcase .d-br .t1 {
+  top: 1.6cqw;
+  border-radius: 0.6cqw;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.vireo-showcase .d-br .t1::after {
+  content: "";
+  position: absolute;
+  inset: 0.9cqw 0.4cqw;
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.4) 0 0.22cqw, transparent 0.22cqw 0.7cqw);
+  -webkit-mask: linear-gradient(90deg, #000, transparent 20%, #000 30%, transparent 55%, #000 60%, #000);
+  mask: linear-gradient(90deg, #000, transparent 20%, #000 30%, transparent 55%, #000 60%, #000);
+}
+
+.vireo-showcase .d-br .t2 {
+  top: 7cqw;
+}
+
+.vireo-showcase .d-br .t2 span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 0.6cqw;
+  transform-origin: left;
+  overflow: hidden;
+  background: #333;
+}
+
+.vireo-showcase .d-br .t2 .g1 {
+  left: 24%;
+  width: 14%;
+}
+.vireo-showcase .d-br .t2 .g2 {
+  left: 60%;
+  width: 16%;
+}
+
+.vireo-showcase .d-br .ph {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 1cqw;
+  width: 0.25cqw;
+  background: #fff;
+  box-shadow: 0 0 1cqw rgba(255, 255, 255, 0.65);
+  z-index: 2;
+}
+
+.vireo-showcase .d-br .tm {
+  position: absolute;
+  right: 1.4cqw;
+  top: 0.3cqw;
+  z-index: 3;
+  font-size: 1.05cqw;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  font-variant-numeric: tabular-nums;
+  --sec: 6;
+  counter-reset: sec var(--sec);
+}
+
+.vireo-showcase .d-br .tm::after {
+  content: "0:0" counter(sec);
+}
+
+.vireo-showcase .slide.active .d-br .s-a {
+  animation: brA 6.4s linear var(--b) both;
+}
+.vireo-showcase .slide.active .d-br .s-b {
+  animation: brB 6.4s linear var(--b) both;
+}
+.vireo-showcase .slide.active .d-br .tag {
+  animation: tagIn 6.4s linear var(--b) both;
+}
+.vireo-showcase .slide.active .d-br .ph {
+  animation: play 6.4s linear var(--b) both;
+}
+.vireo-showcase .slide.active .d-br .tm {
+  animation: sec 6.4s steps(6, end) var(--b) both;
+}
+.vireo-showcase .slide.active .d-br .g1 {
+  animation: grow 0.5s var(--ease) calc(var(--b) + 0.5s) backwards;
+}
+.vireo-showcase .slide.active .d-br .g2 {
+  animation: grow 0.5s var(--ease) calc(var(--b) + 0.9s) backwards;
+}
+.vireo-showcase .slide.active .d-br .row:nth-child(2) .a1 {
+  animation: swapOut 0.3s ease calc(var(--b) + 0.9s) both;
+}
+.vireo-showcase .slide.active .d-br .row:nth-child(2) .a2 {
+  animation: swapIn 0.3s ease calc(var(--b) + 0.9s) both;
+}
+.vireo-showcase .slide.active .d-br .row:nth-child(3) .a1 {
+  animation: swapOut 0.3s ease calc(var(--b) + 1.3s) both;
+}
+.vireo-showcase .slide.active .d-br .row:nth-child(3) .a2 {
+  animation: swapIn 0.3s ease calc(var(--b) + 1.3s) both;
+}
+
+@keyframes brA {
+  0%, 23% { opacity: 0; transform: scale(1.1); }
+  25% { opacity: 1; transform: scale(1.08); }
+  38% { opacity: 1; transform: scale(1); }
+  40%, 100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes brB {
+  0%, 59% { opacity: 0; transform: scale(1.1); }
+  61% { opacity: 1; transform: scale(1.08); }
+  76% { opacity: 1; transform: scale(1); }
+  78%, 100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes tagIn {
+  0%, 24% { opacity: 0; }
+  26%, 37% { opacity: 1; }
+  39%, 60% { opacity: 0; }
+  62%, 75% { opacity: 1; }
+  77%, 100% { opacity: 0; }
+}
+
+@keyframes play {
+  from { left: 1cqw; }
+  to { left: calc(100% - 1cqw); }
+}
+
+@keyframes grow {
+  from { transform: scaleX(0); opacity: 0; }
+}
+
+@keyframes sec {
+  from { --sec: 0; }
+  to { --sec: 6; }
+}
+
+/* =========================================================================
+   5 · AI Audio Clean Demo
+   ========================================================================= */
+.vireo-showcase .d-au .avt {
+  position: absolute;
+  left: 8cqw;
+  top: 7cqw;
+  width: 17cqw;
+  aspect-ratio: 9 / 16;
+  border-radius: 1.2cqw;
+  overflow: hidden;
+  background: #222;
+  box-shadow: 0 2cqw 5cqw -2cqw rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.vireo-showcase .d-au .avt i.bd {
+  position: absolute;
+  left: 0.9cqw;
+  bottom: 0.9cqw;
+  z-index: 2;
+  font-style: normal;
+  font-size: 1.1cqw;
+  font-weight: 600;
+  padding: 0.4cqw 1cqw;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.6);
+  display: grid;
+}
+
+.vireo-showcase .d-au .avt i.bd span {
+  grid-area: 1 / 1;
+}
+
+.vireo-showcase .d-au .avt i.bd .x1 {
+  opacity: 0;
+}
+.vireo-showcase .d-au .avt i.bd .x2 {
+  color: #7ff0d4;
+}
+
+.vireo-showcase .d-au .wvp {
+  position: absolute;
+  left: 28cqw;
+  top: 7cqw;
+  width: 64cqw;
+  height: 30.2cqw;
+  border-radius: 1.4cqw;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4.6cqw 2cqw 1.6cqw;
+  overflow: hidden;
+}
+
+.vireo-showcase .d-au .wvp b {
+  display: block;
+  width: 0.7cqw;
+  border-radius: 99px;
+  height: calc(var(--h) * 1%);
+  background: linear-gradient(#7ff0d4, #2fb3a0);
+}
+
+.vireo-showcase .d-au .lbl {
+  position: absolute;
+  top: 8.4cqw;
+  font-size: 1.3cqw;
+  font-weight: 600;
+  padding: 0.6cqw 1.5cqw;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.12);
+  z-index: 2;
+}
+
+.vireo-showcase .d-au .l1 {
+  left: 29.4cqw;
+  display: grid;
+}
+
+.vireo-showcase .d-au .l1 span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+.vireo-showcase .d-au .l1 .x1 {
+  opacity: 0;
+}
+
+.vireo-showcase .d-au .l2 {
+  right: 9.4cqw;
+  color: #7ff0d4;
+}
+
+.vireo-showcase .d-au .sweep {
+  position: absolute;
+  left: 28cqw;
+  top: 7cqw;
+  width: 0.25cqw;
+  height: 30.2cqw;
+  background: #fff;
+  box-shadow: 0 0 1cqw rgba(255, 255, 255, 0.7);
+  opacity: 0;
+  z-index: 2;
+}
+
+.vireo-showcase .d-au .sw {
+  position: absolute;
+  left: 60cqw;
+  top: 41cqw;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 1.6cqw;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vireo-showcase .d-au .trk {
+  position: relative;
+  width: 6cqw;
+  height: 3.2cqw;
+  border-radius: 99px;
+  background: #2fb3a0;
+  flex: none;
+}
+
+.vireo-showcase .d-au .trk i {
+  position: absolute;
+  left: 0.4cqw;
+  top: 0.4cqw;
+  width: 2.4cqw;
+  height: 2.4cqw;
+  border-radius: 50%;
+  background: #fff;
+  transform: translateX(2.8cqw);
+  transition: transform 0.3s;
+}
+
+.vireo-showcase .d-au .cur {
+  transform: translate(75cqw, 49cqw);
+}
+
+.vireo-showcase .slide.active .d-au .wvp b {
+  animation: den 1s var(--ease) calc(var(--b) + 1.6s + var(--i) * 0.014s) backwards;
+}
+
+.vireo-showcase .slide.active .d-au .trk {
+  animation: trkOn 0.3s ease calc(var(--b) + 1.5s) backwards;
+}
+
+.vireo-showcase .slide.active .d-au .trk i {
+  animation: knobOn 0.35s var(--spring) calc(var(--b) + 1.5s) backwards;
+}
+
+.vireo-showcase .slide.active .d-au .l1 .x1,
+.vireo-showcase .slide.active .d-au .avt .x1 {
+  animation: swapOut 0.3s ease calc(var(--b) + 1.55s) both;
+}
+
+.vireo-showcase .slide.active .d-au .l1 .x2,
+.vireo-showcase .slide.active .d-au .avt .x2 {
+  animation: swapIn 0.3s ease calc(var(--b) + 1.55s) both;
+}
+
+.vireo-showcase .slide.active .d-au .l2 {
+  animation: swapIn 0.5s ease calc(var(--b) + 2.4s) both;
+}
+
+.vireo-showcase .slide.active .d-au .sweep {
+  animation: sweepA 3.2s linear calc(var(--b) + 2.4s) both;
+}
+
+.vireo-showcase .slide.active .d-au .cur {
+  animation: cur5 3.2s ease var(--b) both;
+}
+
+@keyframes den {
+  from {
+    height: calc(var(--n) * 1%);
+    filter: grayscale(1) brightness(1.7);
+    opacity: 0.55;
+  }
+}
+
+@keyframes trkOn {
+  from {
+    background: rgba(255, 255, 255, 0.22);
+  }
+}
+
+@keyframes knobOn {
+  from {
+    transform: translateX(0);
+  }
+}
+
+@keyframes sweepA {
+  0% { opacity: 1; left: 28.6cqw; }
+  92% { opacity: 1; }
+  100% { opacity: 0; left: 91.2cqw; }
+}
+
+@keyframes cur5 {
+  0% { transform: translate(86cqw, 52cqw); }
+  44% { transform: translate(67cqw, 42.2cqw); }
+  48% { transform: translate(67cqw, 42.2cqw) scale(0.82); }
+  54% { transform: translate(67cqw, 42.2cqw); }
+  100% { transform: translate(78cqw, 49cqw); }
+}
+
+/* =========================================================================
+   6 · AI Voice-over Demo
+   ========================================================================= */
+.vireo-showcase .d-vo .vid3 {
+  position: absolute;
+  left: 7cqw;
+  top: 6cqw;
+  width: 50cqw;
+  height: 28.1cqw;
+  border-radius: 1.2cqw;
+  overflow: hidden;
+  background: #222;
+  box-shadow: 0 2cqw 5cqw -2cqw rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.vireo-showcase .d-vo .vid3 .badge {
+  position: absolute;
+  left: 1.2cqw;
+  top: 1.2cqw;
+  z-index: 2;
+  font-size: 1.2cqw;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 0.4cqw 1.1cqw;
+  border-radius: 99px;
+  display: flex;
+  align-items: center;
+  gap: 0.7cqw;
+  color: #fff;
+}
+
+.vireo-showcase .d-vo .vid3 .badge::before {
+  content: "";
+  width: 0.8cqw;
+  height: 0.8cqw;
+  border-radius: 50%;
+  background: #ff6b8f;
+}
+
+.vireo-showcase .d-vo .dub {
+  position: absolute;
+  left: 7cqw;
+  top: 36.4cqw;
+  width: 50cqw;
+  height: 11.4cqw;
+  border-radius: 1.2cqw;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.6cqw 2cqw;
+}
+
+.vireo-showcase .d-vo .dub small {
+  display: block;
+  font-size: 1.15cqw;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 0.8cqw;
+  font-weight: 500;
+}
+
+.vireo-showcase .d-vo .dub .ln {
+  position: absolute;
+  left: 2cqw;
+  right: 12cqw;
+  top: 4.4cqw;
+  font-size: 2.1cqw;
+  font-weight: 700;
+  line-height: 1.25;
+  opacity: 0;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vireo-showcase .d-vo .dub .ln.k0 {
+  opacity: 1;
+}
+
+.vireo-showcase .d-vo .dub .lg {
+  position: absolute;
+  left: 2cqw;
+  top: 1.6cqw;
+  font-size: 1.15cqw;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+  opacity: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vireo-showcase .d-vo .dub .lg.k0 {
+  opacity: 1;
+}
+
+.vireo-showcase .d-vo .wf {
+  position: absolute;
+  right: 2cqw;
+  top: 3cqw;
+  width: 8cqw;
+  height: 5.4cqw;
+  display: flex;
+  align-items: center;
+  gap: 0.4cqw;
+}
+
+.vireo-showcase .d-vo .wf b {
+  flex: 1;
+  display: block;
+  border-radius: 99px;
+  height: calc(var(--h) * 1%);
+  background: linear-gradient(#ff9ac4, #d9558d);
+}
+
+.vireo-showcase .d-vo .voices {
+  position: absolute;
+  left: 61cqw;
+  top: 6cqw;
+  width: 32cqw;
+  height: 41.8cqw;
+  border-radius: 1.4cqw;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 2.6cqw;
+}
+
+.vireo-showcase .d-vo .vr {
+  position: absolute;
+  left: 1.6cqw;
+  right: 1.6cqw;
+  top: calc(5.4cqw + var(--k) * 8.6cqw);
+  height: 7.4cqw;
+  border-radius: 1cqw;
+  display: flex;
+  align-items: center;
+  gap: 1.4cqw;
+  padding: 0 1.4cqw;
+  background: rgba(255, 255, 255, 0.06);
+  outline: 0.2cqw solid transparent;
+  cursor: pointer;
+  transition: background 0.2s, outline-color 0.2s;
+}
+
+.vireo-showcase .d-vo .vr.on {
+  outline-color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.vireo-showcase .d-vo .av {
+  width: 3.8cqw;
+  height: 3.8cqw;
+  border-radius: 50%;
+  flex: none;
+  background: linear-gradient(135deg, var(--a1), var(--a2));
+}
+
+.vireo-showcase .d-vo .vr div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3cqw;
+  font-weight: 600;
+  font-size: 1.65cqw;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.vireo-showcase .d-vo .vr small {
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 1.2cqw;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vireo-showcase .slide.active .d-vo .vr {
+  animation: pick 6.4s linear calc(var(--b) + var(--k) * 1.6s) infinite;
+}
+
+.vireo-showcase .slide.active .d-vo .ln,
+.vireo-showcase .slide.active .d-vo .lg {
+  animation: lnShow 6.4s linear calc(var(--b) + var(--k) * 1.6s) infinite backwards;
+}
+
+.vireo-showcase .slide.active .d-vo .wf b {
+  animation: pulse 0.7s ease-in-out calc(var(--b) + var(--i) * -0.09s) infinite alternate;
+}
+
+@keyframes pick {
+  0%, 24% { outline-color: #fff; background: rgba(255, 255, 255, 0.16); }
+  26%, 100% { outline-color: transparent; background: rgba(255, 255, 255, 0.06); }
+}
+
+@keyframes lnShow {
+  0% { opacity: 0; transform: translateY(0.8cqw); }
+  3%, 24% { opacity: 1; transform: none; }
+  26%, 100% { opacity: 0; }
+}
+
+@keyframes pulse {
+  to { transform: scaleY(0.3); }
+}
+
+/* =========================================================================
+   Responsive Adjustments
+   ========================================================================= */
+@container (max-width: 580px) {
+  .vireo-showcase .d-clip .bar {
+    top: 6cqw;
+    width: 94%;
+    padding: 3px 4px 3px 10px;
+    min-height: 36px;
+  }
+  .vireo-showcase .d-clip .bar .bar-input {
+    font-size: 11px;
+  }
+  .vireo-showcase .d-clip .bar .get-clips-btn {
+    padding: 5px 12px;
+    font-size: 11px;
+  }
+  .vireo-showcase .d-clip .clip {
+    top: 30cqw;
+  }
+}
+
+/* =========================================================================
+   Strict Prefers-Reduced-Motion Override
+   ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  .vireo-showcase .demo,
+  .vireo-showcase .demo *,
+  .vireo-showcase .pg::after {
+    animation: none !important;
+  }
+  .vireo-showcase .track,
+  .vireo-showcase .slide,
+  .vireo-showcase .glow,
+  .vireo-showcase .d-rf .scene,
+  .vireo-showcase .d-rf .cb {
+    transition: none !important;
+  }
+  .vireo-showcase .pg {
+    display: none;
+  }
+}

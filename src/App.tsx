@@ -22,24 +22,31 @@ const AdminPage = React.lazy(() => import('./pages/AdminPage').then(m => ({ defa
 const ABStudioHistoryPage = React.lazy(() => import('./pages/ABStudioHistoryPage').then(m => ({ default: m.ABStudioHistoryPage })));
 const WorkflowPage = React.lazy(() => import('./pages/WorkflowPage').then(m => ({ default: m.WorkflowPage })));
 const WorkspacePage = React.lazy(() => import('./pages/WorkspacePage').then(m => ({ default: m.WorkspacePage })));
+import { CurrencyProvider } from './context/CurrencyContext';
 const TermsPage = React.lazy(() => import('./pages/TermsPage').then(m => ({ default: m.TermsPage })));
 const PrivacyPage = React.lazy(() => import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })));
+const ComparisonsPage = React.lazy(() => import('./pages/ComparisonsPage').then(m => ({ default: m.ComparisonsPage })));
+const SupportPage = React.lazy(() => import('./pages/SupportPage').then(m => ({ default: m.SupportPage })));
 const NotFoundPage = React.lazy(() => import('./pages/NotFoundPage').then(m => ({ default: m.NotFoundPage })));
 import { CookieNotice } from './components/CookieNotice';
 
 export const App: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <CookieNotice />
-        <React.Suspense fallback={<div className="mx-auto mt-20 h-40 w-full max-w-6xl animate-pulse rounded-2xl bg-white" aria-label="Loading page" />}><Routes>
-          {/* Public marketing layout with top navbar & footer */}
-          <Route element={<RootLayout />}>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/terms" element={<TermsPage />} />
-            <Route path="/privacy" element={<PrivacyPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
+      <CurrencyProvider>
+        <BrowserRouter>
+          <CookieNotice />
+          <React.Suspense fallback={<div className="mx-auto mt-20 h-40 w-full max-w-6xl animate-pulse rounded-2xl bg-white" aria-label="Loading page" />}><Routes>
+            {/* Public marketing layout with top navbar & footer */}
+            <Route element={<RootLayout />}>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/comparisons" element={<ComparisonsPage />} />
+              <Route path="/support" element={<SupportPage />} />
+              <Route path="/contact" element={<Navigate to="/support" replace />} />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
 
           {/* Auth routes: only accessible when not logged in */}
           <Route element={<PublicOnlyRoute />}>
@@ -70,7 +77,8 @@ export const App: React.FC = () => {
             <Route path="/clips/:clipId/edit" element={<ClipEditorPage />} />
           </Route>
         </Routes></React.Suspense>
-      </BrowserRouter>
+        </BrowserRouter>
+      </CurrencyProvider>
     </AuthProvider>
   );
 };

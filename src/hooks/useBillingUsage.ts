@@ -23,7 +23,7 @@ export function useBillingUsage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     fetchUsage();

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Session, AuthError } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { backendRequest } from '../services/backendClient';
@@ -251,19 +251,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     projectService.clear();
   };
 
-  const value: AuthContextType = {
-    user,
-    session,
-    profile,
-    creatorProfile,
-    loading,
-    isAuthenticated: Boolean(user),
-    isConfigured: isSupabaseConfigured,
-    signUp,
-    signInWithPassword,
-    signOut,
-    refreshProfile,
-  };
+  const value: AuthContextType = useMemo(
+    () => ({
+      user,
+      session,
+      profile,
+      creatorProfile,
+      loading,
+      isAuthenticated: Boolean(user),
+      isConfigured: isSupabaseConfigured,
+      signUp,
+      signInWithPassword,
+      signOut,
+      refreshProfile,
+    }),
+    [user, session, profile, creatorProfile, loading, signUp, signInWithPassword, signOut, refreshProfile]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
